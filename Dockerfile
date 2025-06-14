@@ -2,7 +2,7 @@
 # Flutter 앱 연동 및 프로덕션 배포용
 
 # Multi-stage build로 크기 최적화
-FROM python:3.11-alpine AS builder
+FROM python:3.11-slim AS builder
 
 # 작업 디렉토리 설정
 WORKDIR /app
@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # ===================================
 # 실제 실행 이미지 (경량화)
 # ===================================
-FROM python:3.11-alpine
+FROM python:3.11-slim
 
 # 런타임에 필요한 패키지만 설치
 RUN apk add --no-cache \
