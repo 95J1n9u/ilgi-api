@@ -22,14 +22,21 @@ def get_database_urls():
     if not base_url:
         raise ValueError("DATABASE_URL이 설정되지 않았습니다.")
     
+    # URL 검증 및 포트 보정
+    parsed = urlparse(base_url)
+    
+    # 포트가 없으면 기본 PostgreSQL 포트 추가
+    if not parsed.port:
+        hostname = parsed.hostname or 'localhost'
+        netloc = f"{parsed.username}:{parsed.password}@{hostname}:5432"
+        base_url = urlunparse(parsed._replace(netloc=netloc))
+        parsed = urlparse(base_url)
+    
     # 명시적으로 동기 URL이 설정된 경우
     if hasattr(settings, 'DATABASE_SYNC_URL') and settings.DATABASE_SYNC_URL:
-        async_url = base_url
+        async_url = base_url if "+asyncpg" in base_url else base_url.replace("postgresql://", "postgresql+asyncpg://")
         sync_url = settings.DATABASE_SYNC_URL
     else:
-        # URL 파싱하여 비동기/동기 버전 생성
-        parsed = urlparse(base_url)
-        
         # 비동기 URL (asyncpg)
         if "+asyncpg" not in parsed.scheme:
             async_scheme = f"{parsed.scheme}+asyncpg"
@@ -103,6 +110,19 @@ async def get_async_db() -> AsyncSession:
             await session.close()
 
 
+# 기존 코드 호환성을 위한 get_db 함수 (비동기)
+async def get_db() -> AsyncSession:
+    """기존 코드 호환성을 위한 데이터베이스 세션 의존성"""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
 def get_sync_db() -> Session:
     """동기 데이터베이스 세션 의존성 (Alembic용)"""
     db = SessionLocal()
@@ -143,21 +163,31 @@ def test_sync_database_connection():
 # 환경 정보 출력
 def print_database_info():
     """데이터베이스 설정 정보 출력"""
-    async_url, sync_url = get_database_urls()
-    
-    # URL에서 비밀번호 마스킹
-    def mask_password(url):
-        parsed = urlparse(url)
-        if parsed.password:
-            masked = parsed._replace(netloc=f"{parsed.username}:***@{parsed.hostname}:{parsed.port}")
-            return urlunparse(masked)
-        return url
-    
-    print("🗄️ Database Configuration:")
-    print(f"  Async URL: {mask_password(async_url)}")
-    print(f"  Sync URL:  {mask_password(sync_url)}")
-    print(f"  Environment: {settings.ENVIRONMENT}")
-    print(f"  Debug: {settings.DEBUG}")
+    try:
+        async_url, sync_url = get_database_urls()
+        
+        # URL에서 비밀번호 마스킹
+        def mask_password(url):
+            try:
+                parsed = urlparse(url)
+                if parsed.password:
+                    port_part = f":{parsed.port}" if parsed.port else ""
+                    masked = parsed._replace(netloc=f"{parsed.username}:***@{parsed.hostname}{port_part}")
+                    return urlunparse(masked)
+                return url
+            except:
+                return url
+        
+        print("🗄️ Database Configuration:")
+        print(f"  Raw DATABASE_URL: {settings.DATABASE_URL}")
+        print(f"  Async URL: {mask_password(async_url)}")
+        print(f"  Sync URL:  {mask_password(sync_url)}")
+        print(f"  Environment: {settings.ENVIRONMENT}")
+        print(f"  Debug: {settings.DEBUG}")
+        
+    except Exception as e:
+        print(f"❌ Database configuration error: {e}")
+        print(f"  Raw DATABASE_URL: {getattr(settings, 'DATABASE_URL', 'NOT SET')}")
 
 
 # 애플리케이션 시작시 정보 출력
