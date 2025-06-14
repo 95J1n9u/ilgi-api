@@ -6,7 +6,7 @@ from typing import AsyncGenerator
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.database import get_db
+from app.config.database import get_async_db as get_db
 from app.core.security import get_current_user_from_firebase
 from app.services.ai_service import AIAnalysisService
 from app.services.emotion_service import EmotionAnalysisService
