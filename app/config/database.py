@@ -80,6 +80,7 @@ def create_database_engines():
 
 # 엔진 생성
 async_engine, sync_engine = create_database_engines()
+engine = async_engine
 
 # 세션 팩토리
 AsyncSessionLocal = async_sessionmaker(
