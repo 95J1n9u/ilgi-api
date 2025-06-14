@@ -1,0 +1,52 @@
+# FastAPI 및 기본 웹 프레임워크
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# 데이터베이스
+sqlalchemy==2.0.23
+alembic==1.13.1
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# Redis & 캐싱
+redis==5.0.1
+aioredis==2.0.1
+
+# Google AI & ML
+google-generativeai==0.3.2
+sentence-transformers==2.2.2
+numpy==1.24.3
+scipy==1.11.4
+
+# 자연어 처리
+nltk==3.8.1
+spacy==3.7.2
+textblob==0.17.1
+
+# 인증 & 보안
+firebase-admin==6.4.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# 유틸리티
+python-dotenv==1.0.0
+httpx==0.25.2
+email-validator==2.1.0
+celery[redis]==5.3.4
+
+# 모니터링 & 로깅
+sentry-sdk[fastapi]==1.38.0
+structlog==23.2.0
+
+# 개발 도구
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
+
+# 타입 힌트
+types-redis==4.6.0.11
