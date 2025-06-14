@@ -197,7 +197,37 @@ docker-compose up -d
 uvicorn app.main:app --reload
 ```
 
-### 프로덕션 환경
+### Railway 배포 (최적화됨)
+**Docker 이미지 크기 6.7GB → <1.5GB로 최적화 완료!**
+
+```bash
+# 1. 최적화된 이미지 빌드
+docker build -f Dockerfile -t ai-diary-backend:optimized .
+
+# 2. Railway 배포
+railway up
+
+# 3. 또는 GitHub 연동 자동 배포
+# - 코드를 GitHub에 push
+# - Railway에서 자동 빌드/배포
+```
+
+#### 최적화 적용 사항
+- ✅ Alpine Linux 기반 이미지 (`python:3.11-alpine`)
+- ✅ 프로덕션용 최소 패키지 (`requirements-production.txt`)
+- ✅ 불필요한 파일 제외 (`.dockerignore`)
+- ✅ ML 라이브러리 제거 (Gemini API만 사용)
+- ✅ 개발 도구 제거 (pytest, black 등)
+
+#### 환경변수 설정 (Railway 대시보드)
+```
+GEMINI_API_KEY=your_api_key
+DATABASE_URL=your_postgres_url
+REDIS_URL=your_redis_url (선택사항)
+SECRET_KEY=your_secret_key
+```
+
+### 프로덕션 환경 (기타)
 ```bash
 # Google Cloud Run 배포
 python scripts/deploy.py --env production
