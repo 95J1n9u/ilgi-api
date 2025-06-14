@@ -12,6 +12,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
+import firebase_admin
+from firebase_admin import credentials
+
 from app.api.v1.router import api_router
 from app.config.settings import get_settings
 from app.core.middleware import (
@@ -89,25 +92,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 async def initialize_firebase():
     """Firebase 초기화"""
     try:
-        import firebase_admin
-        from firebase_admin import credentials
-        
-        # Firebase 인증 정보 설정
-        cred_dict = {
-            "type": "service_account",
-            "project_id": settings.FIREBASE_PROJECT_ID,
-            "private_key_id": settings.FIREBASE_PRIVATE_KEY_ID,
-            "private_key": settings.FIREBASE_PRIVATE_KEY,
-            "client_email": settings.FIREBASE_CLIENT_EMAIL,
-            "client_id": settings.FIREBASE_CLIENT_ID,
-            "auth_uri": settings.FIREBASE_AUTH_URI,
-            "token_uri": settings.FIREBASE_TOKEN_URI,
-        }
-        
-        cred = credentials.Certificate(cred_dict)
-        firebase_admin.initialize_app(cred)
-        logger.info("🔥 Firebase Admin SDK 초기화 완료")
-        
+        if not firebase_admin._apps:
+            cred_dict = {
+                "type": "service_account",
+                "project_id": settings.FIREBASE_PROJECT_ID,
+                "private_key_id": settings.FIREBASE_PRIVATE_KEY_ID,
+                "private_key": settings.FIREBASE_PRIVATE_KEY,
+                "client_email": settings.FIREBASE_CLIENT_EMAIL,
+                "client_id": settings.FIREBASE_CLIENT_ID,
+                "auth_uri": settings.FIREBASE_AUTH_URI,
+                "token_uri": settings.FIREBASE_TOKEN_URI,
+            }
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+            logger.info("🔥 Firebase Admin SDK 초기화 완료")
+        else:
+            logger.info("⚠️ Firebase 이미 초기화됨 - 중복 초기화 방지")
     except Exception as e:
         logger.error(f"❌ Firebase 초기화 실패: {e}")
         raise
