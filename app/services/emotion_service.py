@@ -7,7 +7,14 @@ from typing import Dict, List, Optional, Any
 
 import google.generativeai as genai
 import structlog
-from textblob import TextBlob
+
+# TextBlob은 선택적 의존성으로 처리
+try:
+    from textblob import TextBlob
+    TEXTBLOB_AVAILABLE = True
+except ImportError:
+    TEXTBLOB_AVAILABLE = False
+    TextBlob = None
 
 from app.config.settings import get_settings
 from app.schemas.analysis import EmotionAnalysis, EmotionScore
@@ -123,7 +130,12 @@ class EmotionAnalysisService:
             raise
     
     def _analyze_with_textblob(self, content: str) -> Dict[str, float]:
-        """TextBlob을 통한 기본 감정 분석"""
+        """TextBlob을 통한 기본 감정 분석 (선택적)"""
+        if not TEXTBLOB_AVAILABLE or TextBlob is None:
+            logger.info("textblob_not_available_using_fallback")
+            # TextBlob이 없으면 기본값 반환
+            return {"polarity": 0.0, "subjectivity": 0.5}
+            
         try:
             blob = TextBlob(content)
             
