@@ -1,31 +1,73 @@
-# Railway 배포용 Dockerfile (최종 최적화 버전)
-FROM python:3.11-alpine
+# AI 일기 분석 백엔드 - 최적화된 Docker 이미지
+# Flutter 앱 연동 및 프로덕션 배포용
+
+# Multi-stage build로 크기 최적화
+FROM python:3.11-alpine AS builder
 
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# Alpine에서 필요한 런타임 패키지만 설치
+# Alpine에서 빌드에 필요한 패키지들 설치
 RUN apk add --no-cache \
-    postgresql-libs \
+    gcc \
+    musl-dev \
+    libffi-dev \
+    postgresql-dev \
     && pip install --upgrade pip
 
-# 최소한의 종속성만 설치
-COPY requirements-production.txt .
-RUN pip install --no-cache-dir -r requirements-production.txt \
-    && pip cache purge
+# 최적화된 종속성 설치
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
 
-# 애플리케이션 코드만 복사
-COPY app/ ./app/
-COPY alembic/ ./alembic/
-COPY alembic.ini .
+# ===================================
+# 실제 실행 이미지 (경량화)
+# ===================================
+FROM python:3.11-alpine
+
+# 런타임에 필요한 패키지만 설치
+RUN apk add --no-cache \
+    postgresql-libs \
+    && addgroup -g 1001 -S appgroup \
+    && adduser -S appuser -u 1001 -G appgroup
+
+# 빌더에서 설치된 패키지들 복사
+COPY --from=builder /root/.local /home/appuser/.local
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# 애플리케이션 코드 복사 (.dockerignore로 불필요한 파일 제외)
+COPY --chown=appuser:appgroup app/ ./app/
+COPY --chown=appuser:appgroup alembic/ ./alembic/
+COPY --chown=appuser:appgroup alembic.ini .
+COPY --chown=appuser:appgroup .env* ./
 
 # 환경변수 설정
+ENV PATH=/home/appuser/.local/bin:$PATH
 ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# 포트 노출
-EXPOSE $PORT
+# 권한 설정
+RUN chown -R appuser:appgroup /app
 
-# Railway에서 자동으로 설정하는 PORT 환경변수 사용
-CMD ["sh", "-c", "python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
+# 비특권 사용자로 실행 (보안)
+USER appuser
+
+# 포트 노출 (Railway는 $PORT 환경변수, 일반적으로는 8000)
+EXPOSE ${PORT:-8000}
+
+# 헬스체크 추가
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:${PORT:-8000}/health', timeout=5)" || exit 1
+
+# 애플리케이션 실행
+# Railway 환경에서는 $PORT 사용, 일반 환경에서는 8000 포트 사용
+CMD ["sh", "-c", "python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+
+# ===================================
+# 이미지 정보
+# ===================================
+LABEL maintainer="AI Diary Backend Team"
+LABEL description="AI 일기 분석 백엔드 서버 - Flutter 앱 연동"
+LABEL version="1.0.0"

@@ -218,6 +218,24 @@ railway up
 - ✅ 불필요한 파일 제외 (`.dockerignore`)
 - ✅ ML 라이브러리 제거 (Gemini API만 사용)
 - ✅ 개발 도구 제거 (pytest, black 등)
+- ✅ 헬스체크 실패 문제 해결 (Railway용 설정)
+
+#### 헬스체크 실패 해결
+- **문제**: `/health` 엔드포인트 접근 불가 (service unavailable)
+- **해결**: Railway용 간소화된 설정 및 메인 애플리케이션 생성
+- **결과**: 필수 환경변수 최소화 (Firebase 제거)
+
+#### Railway 배포 방법
+```bash
+# 빠른 배포 스크립트 사용 (추천)
+python deploy_to_railway.py
+
+# 또는 수동 배포
+git add .
+git commit -m "Railway 헬스체크 수정"
+git push origin main
+# Railway 대시보드에서 GitHub 연동 배포
+```
 
 #### 환경변수 설정 (Railway 대시보드)
 ```
