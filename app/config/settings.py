@@ -53,6 +53,11 @@ class Settings(BaseSettings):
         default=["http://localhost:3000", "http://localhost:8080"]
     )
     
+    # 데이터베이스 설정
+    DATABASE_URL: Optional[str] = Field(None, description="postgresql+asyncpg://ai_diary_user:!rkdwlsrn713@postgres/ai_diary_db")
+    DATABASE_SYNC_URL: Optional[str] = Field(None, description="postgresql://ai_diary_user:!rkdwlsrn713@postgres/ai_diary_db")
+    DATABASE_TEST_URL: Optional[str] = Field(None, description="DATABASE_TEST_URL=postgresql+asyncpg://ai_diary_user:!rkdwlsrn713@postgres/ai_diary_test_db")
+
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = Field(default=100)
     

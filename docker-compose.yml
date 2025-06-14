@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/ai_diary_db
+      - DATABASE_URL=postgresql+asyncpg://ai_diary_user:!rkdwlsrn713@postgres/ai_diary_db
       - REDIS_URL=redis://redis:6379/0
     env_file:
       - .env
