@@ -7,12 +7,12 @@ FROM python:3.11-slim AS builder
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# Alpine에서 빌드에 필요한 패키지들 설치
-RUN apk add --no-cache \
+# 빌드에 필요한 패키지 설치
+RUN apt-get update && apt-get install -y \
     gcc \
-    musl-dev \
+    g++ \
     libffi-dev \
-    postgresql-dev \
+    libpq-dev \
     && pip install --upgrade pip
 
 # 최적화된 종속성 설치
@@ -24,11 +24,13 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # ===================================
 FROM python:3.11-slim
 
-# 런타임에 필요한 패키지만 설치
-RUN apk add --no-cache \
-    postgresql-libs \
-    && addgroup -g 1001 -S appgroup \
-    && adduser -S appuser -u 1001 -G appgroup
+# 런타임에 필요한 패키지 설치
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 유저 및 그룹 생성 (보안 목적)
+RUN groupadd -g 1001 appgroup && useradd -u 1001 -g appgroup appuser
 
 # 빌더에서 설치된 패키지들 복사
 COPY --from=builder /root/.local /home/appuser/.local
@@ -62,7 +64,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:${PORT:-8000}/health', timeout=5)" || exit 1
 
 # 애플리케이션 실행
-# Railway 환경에서는 $PORT 사용, 일반 환경에서는 8000 포트 사용
 CMD ["sh", "-c", "python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
 
 # ===================================
