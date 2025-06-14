@@ -44,7 +44,7 @@ COPY --chown=appuser:appgroup .env* ./
 
 # 환경변수 설정
 ENV PATH=/home/appuser/.local/bin:$PATH
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 

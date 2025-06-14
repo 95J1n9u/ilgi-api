@@ -15,8 +15,20 @@ from sqlalchemy import select, update, and_
 
 from app.config.settings import get_settings
 from app.core.exceptions import AIServiceException
-from app.models.analysis import DiaryAnalysis, UserPersonalitySummary, UserEmotionPattern
-from app.models.user import User, UserVector
+
+# 모델 import를 지연 로딩으로 처리
+try:
+    from app.models.analysis import DiaryAnalysis, UserPersonalitySummary, UserEmotionPattern
+    from app.models.user import User, UserVector
+except ImportError as e:
+    # 개발/테스트 환경에서 모델이 없을 수 있음
+    logger = structlog.get_logger()
+    logger.warning(f"Model import failed: {e}")
+    DiaryAnalysis = None
+    UserPersonalitySummary = None
+    UserEmotionPattern = None
+    User = None
+    UserVector = None
 from app.schemas.analysis import (
     DiaryAnalysisRequest,
     DiaryAnalysisResponse,
@@ -235,6 +247,13 @@ class AIAnalysisService:
             processing_time = time.time() - start_time
             
             # 7. 결과를 데이터베이스에 저장
+            # 늤이나믹 import로 모델 로딩 문제 해결
+            try:
+                from app.models.analysis import DiaryAnalysis
+            except ImportError:
+                logger.error("DiaryAnalysis model not available")
+                raise AIServiceException("모델 로딩 실패: DiaryAnalysis")
+            
             analysis_result = DiaryAnalysis(
                 analysis_id=analysis_id,
                 diary_id=request.diary_id,
@@ -487,6 +506,13 @@ class AIAnalysisService:
     ) -> Optional[DiaryAnalysisResponse]:
         """분석 결과 조회"""
         try:
+            # 늤이나믹 import
+            try:
+                from app.models.analysis import DiaryAnalysis
+            except ImportError:
+                logger.error("DiaryAnalysis model not available")
+                return None
+                
             query = select(DiaryAnalysis).where(
                 and_(
                     DiaryAnalysis.diary_id == diary_id,
@@ -531,6 +557,13 @@ class AIAnalysisService:
     ):
         """사용자 벡터 업데이트 (백그라운드 작업)"""
         try:
+            # 늤이나믹 import
+            try:
+                from app.models.user import UserVector
+            except ImportError:
+                logger.error("UserVector model not available")
+                return
+                
             # user_id 검증
             valid_user_id = validate_and_fix_user_id(user_id)
             

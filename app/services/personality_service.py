@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 
 from app.config.settings import get_settings
-from app.models.analysis import DiaryAnalysis, UserPersonalitySummary
+# 모델 import를 지연 로딩으로 처리 (동적 import)
 from app.schemas.analysis import PersonalityAnalysis, MBTIIndicators, Big5Traits
 
 settings = get_settings()
@@ -166,6 +166,13 @@ class PersonalityAnalysisService:
     ) -> List[Dict]:
         """사용자의 이전 성격 분석 결과 조회"""
         try:
+            # 늤이나믹 import
+            try:
+                from app.models.analysis import DiaryAnalysis
+            except ImportError:
+                logger.error("DiaryAnalysis model not available")
+                return []
+                
             # UUID 형식 검증
             try:
                 import uuid
@@ -429,6 +436,13 @@ class PersonalityAnalysisService:
     async def get_user_personality(self, user_id: str, db: AsyncSession) -> Dict:
         """사용자 종합 성격 분석 결과 조회"""
         try:
+            # 늤이나믹 import
+            try:
+                from app.models.analysis import UserPersonalitySummary
+            except ImportError:
+                logger.error("UserPersonalitySummary model not available")
+                return {"error": "모델을 찾을 수 없습니다."}
+                
             # 사용자 성격 요약 조회
             query = select(UserPersonalitySummary).where(
                 UserPersonalitySummary.user_id == user_id
@@ -463,6 +477,13 @@ class PersonalityAnalysisService:
     ):
         """사용자 성격 요약 업데이트 (백그라운드 작업)"""
         try:
+            # 늤이나믹 import
+            try:
+                from app.models.analysis import UserPersonalitySummary
+            except ImportError:
+                logger.error("UserPersonalitySummary model not available")
+                return
+                
             # 최근 분석 결과들 조회 (최소 3개 이상)
             historical_analyses = await self._get_user_historical_analyses(
                 user_id, db, limit=20

@@ -10,8 +10,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, not_
 
-from app.models.user import User, UserVector, MatchingPreference
-from app.models.analysis import UserPersonalitySummary, UserEmotionPattern
+# 모델 import를 지연 로딩으로 처리 (동적 import)
 from app.schemas.matching import (
     MatchingCandidate,
     CompatibilityResponse,
@@ -186,6 +185,14 @@ class MatchingService:
     async def _get_user_matching_data(self, user_id: str, db: AsyncSession) -> Optional[Dict]:
         """사용자 매칭 데이터 조회"""
         try:
+            # 늤이나믹 import
+            try:
+                from app.models.user import User, UserVector, MatchingPreference
+                from app.models.analysis import UserPersonalitySummary, UserEmotionPattern
+            except ImportError as e:
+                logger.error(f"Model import failed: {e}")
+                return None
+                
             # 기본 사용자 정보
             user_query = select(User).where(User.id == user_id)
             user_result = await db.execute(user_query)
@@ -234,9 +241,16 @@ class MatchingService:
     
     async def _get_candidate_users(
         self, user_id: str, filters: Optional[MatchingFilters], db: AsyncSession
-    ) -> List[User]:
+    ) -> List:
         """후보자 목록 조회"""
         try:
+            # 늤이나믹 import
+            try:
+                from app.models.user import User
+            except ImportError:
+                logger.error("User model not available")
+                return []
+                
             query = select(User).where(
                 and_(
                     User.id != user_id,  # 본인 제외
@@ -647,7 +661,7 @@ class MatchingService:
     
     async def _create_matching_candidate(
         self,
-        candidate_user: User,
+        candidate_user,  # User 타입 힌트 제거 (동적 import로 인해)
         candidate_data: Dict,
         compatibility_score: float,
         rank: int,
