@@ -109,6 +109,44 @@ async def verify_firebase_token(token: str) -> Dict[str, Any]:
             logger.error(f"❌ 잘못된 토큰 형식: {len(token_parts)}개 부분 (정상: 3개)")
             raise AuthenticationException(f"Invalid token format: expected 3 parts, got {len(token_parts)}")
         
+        # 토큰 헤더 디코딩하여 프로젝트 정보 확인
+        try:
+            import base64
+            import json
+            header_data = token_parts[0]
+            # Base64 패딩 추가
+            while len(header_data) % 4 != 0:
+                header_data += '='
+            header = json.loads(base64.b64decode(header_data))
+            logger.info(f"🔍 토큰 헤더: {header}")
+        except Exception as e:
+            logger.warning(f"⚠️ 토큰 헤더 디코딩 실패: {e}")
+        
+        # 토큰 페이로드 디코딩하여 발급자(iss) 확인
+        try:
+            payload_data = token_parts[1]
+            while len(payload_data) % 4 != 0:
+                payload_data += '='
+            payload = json.loads(base64.b64decode(payload_data))
+            logger.info(f"🔍 토큰 발급자(iss): {payload.get('iss', 'N/A')}")
+            logger.info(f"🔍 토큰 대상(aud): {payload.get('aud', 'N/A')}")
+            logger.info(f"🔍 토큰 만료시간: {payload.get('exp', 'N/A')}")
+            
+            # 현재 백엔드 Firebase 설정 정보 로깅
+            from app.config.settings import get_settings
+            settings = get_settings()
+            logger.info(f"🏗️ 백엔드 Firebase Project ID: {settings.FIREBASE_PROJECT_ID}")
+            
+            # 프로젝트 ID 일치 여부 확인
+            expected_aud = f"projects/{settings.FIREBASE_PROJECT_ID}"
+            if settings.FIREBASE_PROJECT_ID and payload.get('aud') != settings.FIREBASE_PROJECT_ID:
+                logger.error(f"❌ 프로젝트 ID 불일치!")
+                logger.error(f"   토큰 aud: {payload.get('aud')}")
+                logger.error(f"   백엔드 설정: {settings.FIREBASE_PROJECT_ID}")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ 토큰 페이로드 디코딩 실패: {e}")
+        
         # 각 부분의 길이 확인 및 패딩 추가 (필요한 경우)
         padded_parts = []
         for i, part in enumerate(token_parts):
@@ -122,6 +160,7 @@ async def verify_firebase_token(token: str) -> Dict[str, Any]:
         padded_token = '.'.join(padded_parts)
         
         # Firebase Admin SDK로 토큰 검증
+        logger.info(f"🔥 Firebase Admin SDK 토큰 검증 시도...")
         decoded_token = auth.verify_id_token(padded_token)
         logger.info(f"✅ Firebase 토큰 검증 성공: uid={decoded_token.get('uid')}")
         return decoded_token
