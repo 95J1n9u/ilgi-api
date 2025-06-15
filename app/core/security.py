@@ -30,12 +30,14 @@ firebase_app = None
 
 
 def initialize_firebase():
-    """Firebase Admin SDK 초기화"""
+    """Firebase Admin SDK 초기화 (중복 호출 방지)"""
     global firebase_initialized, firebase_app
     
     if firebase_initialized:
-        logger.info("🔥 Firebase already initialized")
+        logger.info("🔥 Firebase already initialized - 중복 초기화 방지")
         return True
+    
+    logger.info("🔥 Firebase 초기화 시작...")
     
     # Firebase 환경변수 확인
     required_vars = [
@@ -136,8 +138,8 @@ def initialize_firebase():
         return False
 
 
-# 시작 시 Firebase 초기화 시도
-initialize_firebase()
+# Firebase 초기화는 필요 시점에만 호출 (지연 로딩)
+# initialize_firebase()  # 주석 처리 - main.py에서 명시적으로 호출
 
 
 async def verify_firebase_token(token: str) -> Dict[str, Any]:

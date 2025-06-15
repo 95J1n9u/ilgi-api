@@ -44,9 +44,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     
     # 환경별 초기화
     try:
-        # Firebase 초기화 (security.py에서 이미 처리됨)
-        from app.core.security import firebase_initialized
-        if firebase_initialized:
+        # Firebase 초기화 (지연 로딩)
+        from app.core.security import initialize_firebase, firebase_initialized
+        firebase_success = initialize_firebase()
+        if firebase_success and firebase_initialized:
             logger.info("🔥 Firebase 초기화 완료")
         else:
             logger.info("🔥 Firebase 비활성화 모드 - 서버는 정상 구동")
