@@ -67,7 +67,7 @@ def initialize_firebase():
                 "type": "service_account",
                 "project_id": settings.FIREBASE_PROJECT_ID,
                 "private_key_id": settings.FIREBASE_PRIVATE_KEY_ID,
-                "private_key": settings.FIREBASE_PRIVATE_KEY.replace('\\n', '\n'),  # 개행 문자 처리
+                "private_key": settings.FIREBASE_PRIVATE_KEY.replace('\\\\n', '\n').replace('\\n', '\n'),  # 개행 문자 처리
                 "client_email": settings.FIREBASE_CLIENT_EMAIL,
                 "client_id": settings.FIREBASE_CLIENT_ID,
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
