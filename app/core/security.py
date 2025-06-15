@@ -22,19 +22,29 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # JWT 토큰 스키마
 security = HTTPBearer()
 
-# Firebase Admin SDK 초기화
-if not firebase_admin._apps:
-    firebase_cred = credentials.Certificate({
-        "type": "service_account",
-        "project_id": settings.FIREBASE_PROJECT_ID,
-        "private_key_id": settings.FIREBASE_PRIVATE_KEY_ID,
-        "private_key": settings.FIREBASE_PRIVATE_KEY,
-        "client_email": settings.FIREBASE_CLIENT_EMAIL,
-        "client_id": settings.FIREBASE_CLIENT_ID,
-        "auth_uri": settings.FIREBASE_AUTH_URI,
-        "token_uri": settings.FIREBASE_TOKEN_URI,
-    })
-    firebase_admin.initialize_app(firebase_cred)
+# Firebase Admin SDK 초기화 (조건부)
+firebase_initialized = False
+
+if not firebase_admin._apps and settings.USE_FIREBASE and settings.FIREBASE_PROJECT_ID:
+    try:
+        firebase_cred = credentials.Certificate({
+            "type": "service_account",
+            "project_id": settings.FIREBASE_PROJECT_ID,
+            "private_key_id": settings.FIREBASE_PRIVATE_KEY_ID,
+            "private_key": settings.FIREBASE_PRIVATE_KEY,
+            "client_email": settings.FIREBASE_CLIENT_EMAIL,
+            "client_id": settings.FIREBASE_CLIENT_ID,
+            "auth_uri": settings.FIREBASE_AUTH_URI,
+            "token_uri": settings.FIREBASE_TOKEN_URI,
+        })
+        firebase_admin.initialize_app(firebase_cred)
+        firebase_initialized = True
+        print("✅ Firebase Admin SDK initialized successfully")
+    except Exception as e:
+        print(f"⚠️ Firebase initialization failed: {e}")
+        firebase_initialized = False
+else:
+    print("ℹ️ Firebase Admin SDK skipped (disabled or missing config)")
 
 
 def create_access_token(
@@ -80,6 +90,9 @@ def get_password_hash(password: str) -> str:
 
 async def verify_firebase_token(token: str) -> Dict[str, Any]:
     """Firebase ID 토큰 검증"""
+    if not firebase_initialized:
+        raise AuthenticationException("Firebase authentication is not available")
+    
     try:
         decoded_token = auth.verify_id_token(token)
         return decoded_token
@@ -105,6 +118,14 @@ async def get_current_user_from_firebase(
                 "email_verified": True,
             }
         
+        # Firebase가 비활성화된 경우 오류 메시지 개선
+        if not firebase_initialized:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Firebase authentication service is not available. Please contact administrator.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
         # 실제 Firebase 토큰 검증
         decoded_token = await verify_firebase_token(token)
         
@@ -115,10 +136,12 @@ async def get_current_user_from_firebase(
             "picture": decoded_token.get("picture"),
             "email_verified": decoded_token.get("email_verified", False),
         }
+    except HTTPException:
+        raise  # HTTPException은 그대로 전달
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail=f"Could not validate credentials: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

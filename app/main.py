@@ -47,9 +47,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     
     # 환경별 초기화
     try:
-        # Firebase 초기화 (설정된 경우에만)
-        if settings.USE_FIREBASE and settings.FIREBASE_PROJECT_ID:
-            await initialize_firebase()
+        # Firebase 초기화 (이미 security.py에서 처리됨)
+        from app.core.security import firebase_initialized
+        if firebase_initialized:
             logger.info("🔥 Firebase 초기화 완료")
         else:
             logger.info("🔥 Firebase 비활성화 모드")
@@ -324,6 +324,48 @@ def create_application() -> FastAPI:
         except Exception as e:
             logger.error(f"❌ API 상태 확인 실패: {e}")
             raise HTTPException(status_code=500, detail="API 상태 확인 실패")
+    
+    # 환경변수 디버깅 엔드포인트 (개발용)
+    @app.get("/api/v1/debug/env")
+    async def debug_environment():
+        """환경변수 상태 확인 (개발 및 디버깅용)"""
+        if not settings.DEBUG and settings.ENVIRONMENT == "production":
+            raise HTTPException(status_code=404, detail="Not found")
+        
+        # Firebase 설정 상태 확인
+        firebase_config_status = {
+            "project_id": bool(settings.FIREBASE_PROJECT_ID),
+            "private_key_id": bool(settings.FIREBASE_PRIVATE_KEY_ID),
+            "private_key": bool(settings.FIREBASE_PRIVATE_KEY),
+            "client_email": bool(settings.FIREBASE_CLIENT_EMAIL),
+            "client_id": bool(settings.FIREBASE_CLIENT_ID),
+            "use_firebase": settings.USE_FIREBASE,
+        }
+        
+        # Firebase 초기화 상태 확인
+        from app.core.security import firebase_initialized
+        
+        return {
+            "debug_mode": settings.DEBUG,
+            "environment": settings.ENVIRONMENT,
+            "firebase": {
+                "config_status": firebase_config_status,
+                "initialized": firebase_initialized,
+                "project_id_value": settings.FIREBASE_PROJECT_ID[:10] + "..." if settings.FIREBASE_PROJECT_ID else None,
+                "client_email_value": settings.FIREBASE_CLIENT_EMAIL[:20] + "..." if settings.FIREBASE_CLIENT_EMAIL else None,
+            },
+            "services": {
+                "gemini_api": bool(settings.GEMINI_API_KEY),
+                "database": bool(settings.DATABASE_URL),
+                "redis": bool(settings.REDIS_URL),
+            },
+            "railway": {
+                "environment": os.getenv("RAILWAY_ENVIRONMENT"),
+                "port": os.getenv("PORT"),
+                "deployment": bool(os.getenv("RAILWAY_ENVIRONMENT")),
+            },
+            "message": "이 정보는 디버깅 목적으로만 사용되며 프로덕션에서는 비활성화됩니다."
+        }
 
     return app
 
