@@ -1,201 +1,192 @@
 """
-보안 관련 유틸리티
+Firebase Admin SDK 기반 보안 시스템
+python-jose 제거하고 Firebase만 사용
 """
+import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 import firebase_admin
 from firebase_admin import auth, credentials
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.config.settings import get_settings
 from app.core.exceptions import AuthenticationException
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
-# Password 해싱
+# Password 해싱 (Firebase 연동 시 필요시에만)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# JWT 토큰 스키마
+# HTTP Bearer 토큰 스키마
 security = HTTPBearer()
 
-# Firebase Admin SDK 초기화 (조건부)
+# Firebase Admin SDK 초기화 상태
 firebase_initialized = False
+firebase_app = None
 
-if not firebase_admin._apps and settings.USE_FIREBASE and settings.FIREBASE_PROJECT_ID:
+
+def initialize_firebase():
+    """Firebase Admin SDK 초기화"""
+    global firebase_initialized, firebase_app
+    
+    if firebase_initialized:
+        logger.info("🔥 Firebase already initialized")
+        return True
+    
+    # Firebase 환경변수 확인
+    required_vars = [
+        settings.FIREBASE_PROJECT_ID,
+        settings.FIREBASE_PRIVATE_KEY,
+        settings.FIREBASE_CLIENT_EMAIL,
+    ]
+    
+    if not all(required_vars):
+        logger.warning("⚠️ Firebase configuration incomplete - running without Firebase")
+        return False
+    
+    if not settings.USE_FIREBASE:
+        logger.info("ℹ️ Firebase disabled in settings")
+        return False
+    
     try:
-        firebase_cred = credentials.Certificate({
-            "type": "service_account",
-            "project_id": settings.FIREBASE_PROJECT_ID,
-            "private_key_id": settings.FIREBASE_PRIVATE_KEY_ID,
-            "private_key": settings.FIREBASE_PRIVATE_KEY,
-            "client_email": settings.FIREBASE_CLIENT_EMAIL,
-            "client_id": settings.FIREBASE_CLIENT_ID,
-            "auth_uri": settings.FIREBASE_AUTH_URI,
-            "token_uri": settings.FIREBASE_TOKEN_URI,
-        })
-        firebase_admin.initialize_app(firebase_cred)
-        firebase_initialized = True
-        print("✅ Firebase Admin SDK initialized successfully")
+        # Firebase 앱이 이미 있는지 확인
+        if not firebase_admin._apps:
+            firebase_cred = credentials.Certificate({
+                "type": "service_account",
+                "project_id": settings.FIREBASE_PROJECT_ID,
+                "private_key_id": settings.FIREBASE_PRIVATE_KEY_ID,
+                "private_key": settings.FIREBASE_PRIVATE_KEY.replace('\\n', '\n'),  # 개행 문자 처리
+                "client_email": settings.FIREBASE_CLIENT_EMAIL,
+                "client_id": settings.FIREBASE_CLIENT_ID,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{settings.FIREBASE_CLIENT_EMAIL}",
+            })
+            
+            firebase_app = firebase_admin.initialize_app(firebase_cred)
+            firebase_initialized = True
+            logger.info("✅ Firebase Admin SDK initialized successfully")
+            return True
+        else:
+            firebase_initialized = True
+            logger.info("✅ Firebase Admin SDK already exists")
+            return True
+            
     except Exception as e:
-        print(f"⚠️ Firebase initialization failed: {e}")
+        logger.error(f"❌ Firebase initialization failed: {str(e)}")
         firebase_initialized = False
-else:
-    print("ℹ️ Firebase Admin SDK skipped (disabled or missing config)")
+        return False
 
 
-def create_access_token(
-    data: Dict[str, Any], expires_delta: Optional[timedelta] = None
-) -> str:
-    """JWT 액세스 토큰 생성"""
-    to_encode = data.copy()
-    
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
-    
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
-    )
-    return encoded_jwt
-
-
-async def verify_access_token(token: str) -> Dict[str, Any]:
-    """JWT 액세스 토큰 검증"""
-    try:
-        # 디버깅용 로깅
-        print(f"🔑 JWT 토큰 검증 시작: {token[:50]}...")
-        print(f"🔑 SECRET_KEY 상태: {bool(settings.SECRET_KEY)}")
-        print(f"🔑 ALGORITHM: {settings.ALGORITHM}")
-        
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-        )
-        
-        print(f"✅ JWT 토큰 검증 성공: {payload}")
-        return payload
-        
-    except jwt.ExpiredSignatureError:
-        print("❌ JWT 토큰 만료")
-        raise AuthenticationException("Token has expired")
-    except jwt.InvalidTokenError as e:
-        print(f"❌ JWT 토큰 오류: {e}")
-        raise AuthenticationException(f"Invalid token: {str(e)}")
-    except Exception as e:
-        print(f"❌ JWT 검증 예외: {e}")
-        raise AuthenticationException(f"Token verification failed: {str(e)}")
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """비밀번호 검증"""
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password: str) -> str:
-    """비밀번호 해싱"""
-    return pwd_context.hash(password)
+# 시작 시 Firebase 초기화 시도
+initialize_firebase()
 
 
 async def verify_firebase_token(token: str) -> Dict[str, Any]:
     """Firebase ID 토큰 검증"""
+    logger.info(f"🔍 Firebase 토큰 검증 시작: {token[:30]}...")
+    
     if not firebase_initialized:
-        raise AuthenticationException("Firebase authentication is not available")
+        logger.error("❌ Firebase not initialized")
+        raise AuthenticationException("Firebase authentication service is not available")
     
     try:
+        # Firebase Admin SDK로 토큰 검증
         decoded_token = auth.verify_id_token(token)
+        logger.info(f"✅ Firebase 토큰 검증 성공: uid={decoded_token.get('uid')}")
         return decoded_token
+        
+    except auth.InvalidIdTokenError as e:
+        logger.error(f"❌ Invalid Firebase token: {str(e)}")
+        raise AuthenticationException(f"Invalid Firebase token: {str(e)}")
+    except auth.ExpiredIdTokenError as e:
+        logger.error(f"❌ Expired Firebase token: {str(e)}")
+        raise AuthenticationException(f"Expired Firebase token: {str(e)}")
     except Exception as e:
+        logger.error(f"❌ Firebase token verification failed: {str(e)}")
         raise AuthenticationException(f"Firebase token verification failed: {str(e)}")
 
 
-async def get_current_user_from_firebase(
+async def create_custom_token(uid: str, additional_claims: Optional[Dict] = None) -> str:
+    """Firebase 커스텀 토큰 생성"""
+    if not firebase_initialized:
+        raise AuthenticationException("Firebase authentication service is not available")
+    
+    try:
+        custom_token = auth.create_custom_token(uid, additional_claims)
+        return custom_token.decode('utf-8')
+    except Exception as e:
+        logger.error(f"❌ Custom token creation failed: {str(e)}")
+        raise AuthenticationException(f"Custom token creation failed: {str(e)}")
+
+
+def get_user_from_token(decoded_token: Dict[str, Any]) -> Dict[str, Any]:
+    """Firebase 토큰에서 사용자 정보 추출"""
+    return {
+        "uid": decoded_token["uid"],
+        "email": decoded_token.get("email"),
+        "name": decoded_token.get("name"),
+        "picture": decoded_token.get("picture"),
+        "email_verified": decoded_token.get("email_verified", False),
+        "firebase_claims": decoded_token.get("firebase", {}),
+    }
+
+
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> Dict[str, Any]:
     """Firebase 토큰으로부터 현재 사용자 정보 추출"""
     try:
-        # Bearer 토큰에서 실제 토큰 추출
         token = credentials.credentials
+        logger.info(f"🔍 사용자 인증 시작: {token[:30]}...")
         
-        # 개발 환경에서 Mock 토큰 허용
+        # 개발 환경에서 테스트 토큰 허용
         if settings.DEBUG and token == "test-token-for-development":
+            logger.info("🧪 개발 모드: 테스트 토큰 사용")
             return {
                 "uid": "test-user-123",
                 "email": "test@example.com",
                 "name": "Test User",
                 "picture": None,
                 "email_verified": True,
+                "firebase_claims": {},
             }
         
-        # Firebase가 비활성화된 경우 오류 메시지 개선
+        # Firebase가 비활성화된 경우
         if not firebase_initialized:
+            logger.error("❌ Firebase 서비스 비활성화")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Firebase authentication service is not available. Please contact administrator.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # 실제 Firebase 토큰 검증
+        # Firebase 토큰 검증
         decoded_token = await verify_firebase_token(token)
+        user_info = get_user_from_token(decoded_token)
         
-        return {
-            "uid": decoded_token["uid"],
-            "email": decoded_token.get("email"),
-            "name": decoded_token.get("name"),
-            "picture": decoded_token.get("picture"),
-            "email_verified": decoded_token.get("email_verified", False),
-        }
+        logger.info(f"✅ 사용자 인증 성공: {user_info['uid']}")
+        return user_info
+        
     except HTTPException:
         raise  # HTTPException은 그대로 전달
+    except AuthenticationException as e:
+        logger.error(f"❌ 인증 실패: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except Exception as e:
+        logger.error(f"❌ 인증 예외: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Could not validate credentials: {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
-async def get_current_user_from_jwt(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> Dict[str, Any]:
-    """JWT 토큰으로부터 현재 사용자 정보 추출"""
-    try:
-        token = credentials.credentials
-        print(f"🔍 JWT 사용자 인증 시작: {token[:30]}...")
-        
-        payload = await verify_access_token(token)
-        
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise AuthenticationException("Invalid token payload: missing user ID")
-        
-        user_info = {
-            "user_id": user_id,
-            "email": payload.get("email"),
-            "name": payload.get("name"),
-        }
-        
-        print(f"✅ JWT 사용자 인증 성공: {user_info}")
-        return user_info
-        
-    except (JWTError, AuthenticationException) as e:
-        print(f"❌ JWT 사용자 인증 실패: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Could not validate JWT token: {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except Exception as e:
-        print(f"❌ JWT 사용자 인증 예외: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -206,8 +197,8 @@ class RoleChecker:
     def __init__(self, allowed_roles: list):
         self.allowed_roles = allowed_roles
     
-    def __call__(self, user: Dict[str, Any] = Depends(get_current_user_from_firebase)):
-        user_role = user.get("role", "user")
+    def __call__(self, user: Dict[str, Any] = Depends(get_current_user)):
+        user_role = user.get("firebase_claims", {}).get("role", "user")
         if user_role not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -219,6 +210,17 @@ class RoleChecker:
 # 권한 체크 인스턴스들
 require_admin = RoleChecker(["admin"])
 require_user = RoleChecker(["user", "admin"])
+
+
+# 유틸리티 함수들
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """비밀번호 검증"""
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password: str) -> str:
+    """비밀번호 해싱"""
+    return pwd_context.hash(password)
 
 
 def sanitize_input(text: str) -> str:
@@ -247,3 +249,14 @@ def generate_api_key() -> str:
     """API 키 생성"""
     import secrets
     return secrets.token_urlsafe(32)
+
+
+# Firebase 서비스 상태 확인
+def get_firebase_status() -> Dict[str, Any]:
+    """Firebase 서비스 상태 반환"""
+    return {
+        "initialized": firebase_initialized,
+        "use_firebase": settings.USE_FIREBASE,
+        "project_id": settings.FIREBASE_PROJECT_ID[:10] + "..." if settings.FIREBASE_PROJECT_ID else None,
+        "client_email": settings.FIREBASE_CLIENT_EMAIL[:20] + "..." if settings.FIREBASE_CLIENT_EMAIL else None,
+    }

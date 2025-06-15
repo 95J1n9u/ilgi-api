@@ -1,180 +1,101 @@
 """
-AI 분석 결과 관련 Pydantic 스키마
+AI 분석 결과 관련 Pydantic 스키마 - Firebase 중심으로 단순화
 """
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
-from pydantic import BaseModel, Field, validator
-
-from app.schemas.diary import DiaryMetadata, DiaryBase
+from pydantic import BaseModel, Field
 
 
-class EmotionScore(BaseModel):
-    """감정 점수"""
-    emotion: str = Field(..., description="감정명")
-    score: float = Field(..., ge=0.0, le=1.0, description="감정 점수 (0-1)")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="신뢰도")
+class DiaryAnalysisRequest(BaseModel):
+    """일기 분석 요청 스키마 - 단순화"""
+    diary_id: str = Field(..., description="일기 고유 ID")
+    content: str = Field(..., description="일기 내용")
+    metadata: Optional[Dict[str, Any]] = Field(default={}, description="추가 메타데이터")
+    user_uid: Optional[str] = Field(None, description="Firebase 사용자 UID (자동 설정)")
 
 
 class EmotionAnalysis(BaseModel):
-    """감정 분석 결과"""
+    """감정 분석 결과 - 단순화"""
     primary_emotion: str = Field(..., description="주요 감정")
-    secondary_emotions: List[str] = Field(default=[], description="보조 감정들")
-    emotion_scores: List[EmotionScore] = Field(..., description="감정별 점수")
-    sentiment_score: float = Field(..., ge=-1.0, le=1.0, description="감정 점수 (-1 ~ 1)")
-    emotional_intensity: float = Field(..., ge=0.0, le=1.0, description="감정 강도")
-    emotional_stability: float = Field(..., ge=0.0, le=1.0, description="감정 안정성")
+    emotions: Dict[str, float] = Field(default={}, description="감정별 점수")
+    sentiment_score: float = Field(..., description="감정 점수 (-1 ~ 1)")
+    confidence: float = Field(..., description="신뢰도 (0 ~ 1)")
 
 
-class MBTIIndicators(BaseModel):
-    """MBTI 지표"""
-    E: float = Field(..., ge=0.0, le=1.0, description="외향성")
-    I: float = Field(..., ge=0.0, le=1.0, description="내향성")
-    S: float = Field(..., ge=0.0, le=1.0, description="감각형")
-    N: float = Field(..., ge=0.0, le=1.0, description="직관형")
-    T: float = Field(..., ge=0.0, le=1.0, description="사고형")
-    F: float = Field(..., ge=0.0, le=1.0, description="감정형")
-    J: float = Field(..., ge=0.0, le=1.0, description="판단형")
-    P: float = Field(..., ge=0.0, le=1.0, description="인식형")
-    
-    @validator('*', pre=True)
-    def validate_scores(cls, v):
-        """점수 범위 검증"""
-        if not isinstance(v, (int, float)):
-            raise ValueError('점수는 숫자여야 합니다')
-        return max(0.0, min(1.0, float(v)))
-
-
-class Big5Traits(BaseModel):
-    """Big5 성격 특성"""
-    openness: float = Field(..., ge=0.0, le=1.0, description="개방성")
-    conscientiousness: float = Field(..., ge=0.0, le=1.0, description="성실성")
-    extraversion: float = Field(..., ge=0.0, le=1.0, description="외향성")
-    agreeableness: float = Field(..., ge=0.0, le=1.0, description="친화성")
-    neuroticism: float = Field(..., ge=0.0, le=1.0, description="신경성")
-
-
-class PersonalityAnalysis(BaseModel):
-    """성격 분석 결과"""
-    mbti_indicators: MBTIIndicators = Field(..., description="MBTI 지표")
-    big5_traits: Big5Traits = Field(..., description="Big5 특성")
-    predicted_mbti: Optional[str] = Field(None, description="예측된 MBTI 유형")
-    personality_summary: List[str] = Field(default=[], description="성격 요약")
-    confidence_level: float = Field(..., ge=0.0, le=1.0, description="분석 신뢰도")
-
-
-class KeywordExtraction(BaseModel):
-    """키워드 추출 결과"""
-    keywords: List[str] = Field(..., description="추출된 키워드")
-    topics: List[str] = Field(..., description="주제 분류")
-    entities: List[str] = Field(default=[], description="개체명")
-    themes: List[str] = Field(default=[], description="테마")
-
-
-class LifestylePattern(BaseModel):
-    """생활 패턴 분석"""
-    activity_patterns: Dict[str, float] = Field(default={}, description="활동 패턴")
-    social_patterns: Dict[str, float] = Field(default={}, description="사회적 패턴")
-    time_patterns: Dict[str, float] = Field(default={}, description="시간 패턴")
-    interest_areas: List[str] = Field(default=[], description="관심 분야")
-    values_orientation: Dict[str, float] = Field(default={}, description="가치관 성향")
-
-
-class DiaryAnalysisRequest(DiaryBase):
-    """일기 분석 요청 스키마"""
-    diary_id: str = Field(..., description="일기 고유 ID")
-    user_id: Optional[str] = Field(None, description="사용자 ID (자동 설정)")
-    analysis_options: Optional[Dict[str, Any]] = Field(default={}, description="분석 옵션")
+class PersonalityInsights(BaseModel):
+    """성격 인사이트 - 단순화"""
+    openness: float = Field(..., description="개방성")
+    conscientiousness: float = Field(..., description="성실성")
+    extraversion: float = Field(..., description="외향성")
+    agreeableness: float = Field(..., description="친화성")
+    neuroticism: float = Field(..., description="신경성")
+    dominant_traits: List[str] = Field(default=[], description="주요 특성")
 
 
 class DiaryAnalysisResponse(BaseModel):
-    """일기 분석 응답 스키마"""
-    diary_id: str = Field(..., description="일기 ID")
+    """일기 분석 응답 스키마 - 단순화"""
     analysis_id: str = Field(..., description="분석 결과 ID")
-    user_id: str = Field(..., description="사용자 ID") 
-    status: str = Field(..., description="분석 상태")
+    diary_id: str = Field(..., description="일기 ID")
+    user_uid: str = Field(..., description="Firebase 사용자 UID")
+    content: str = Field(..., description="분석된 내용")
     
-    # 분석 결과
+    # 분석 결과 (단순화)
     emotion_analysis: EmotionAnalysis = Field(..., description="감정 분석")
-    personality_analysis: PersonalityAnalysis = Field(..., description="성격 분석")
-    keyword_extraction: KeywordExtraction = Field(..., description="키워드 추출")
-    lifestyle_patterns: LifestylePattern = Field(..., description="생활 패턴")
+    personality_insights: PersonalityInsights = Field(..., description="성격 인사이트")
     
-    # 인사이트
-    insights: List[str] = Field(default=[], description="분석 인사이트")
+    # 추가 정보
+    themes: List[str] = Field(default=[], description="주제")
+    keywords: List[str] = Field(default=[], description="키워드")
+    mood_score: float = Field(..., description="기분 점수 (0-10)")
+    stress_level: float = Field(..., description="스트레스 수준 (0-10)")
+    life_satisfaction: float = Field(..., description="삶의 만족도 (0-10)")
     recommendations: List[str] = Field(default=[], description="추천사항")
     
     # 메타데이터
-    analysis_version: str = Field(..., description="분석 모델 버전")
-    processing_time: float = Field(..., description="처리 시간(초)")
-    confidence_score: float = Field(..., ge=0.0, le=1.0, description="전체 신뢰도")
-    processed_at: datetime = Field(..., description="분석 완료 시간")
+    created_at: str = Field(..., description="분석 완료 시간")
+    processed_by: str = Field(..., description="처리 모델")
     
     class Config:
         from_attributes = True
 
 
-class BatchAnalysisRequest(BaseModel):
-    """일괄 분석 요청 스키마"""
-    diary_entries: List[DiaryAnalysisRequest] = Field(..., description="분석할 일기 목록")
-    batch_options: Optional[Dict[str, Any]] = Field(default={}, description="일괄 처리 옵션")
-
-
 class UserInsightsResponse(BaseModel):
-    """사용자 종합 인사이트 응답"""
-    user_id: str = Field(..., description="사용자 ID")
-    analysis_period: Dict[str, str] = Field(..., description="분석 기간")
-    total_entries: int = Field(..., description="분석된 일기 수")
-    
-    # 종합 분석 결과
-    overall_emotion_pattern: EmotionAnalysis = Field(..., description="전체 감정 패턴")
-    personality_profile: PersonalityAnalysis = Field(..., description="성격 프로필")
-    lifestyle_summary: LifestylePattern = Field(..., description="생활 패턴 요약")
-    
-    # 변화 패턴
-    emotion_trends: Dict[str, List[float]] = Field(default={}, description="감정 변화 추이")
-    personality_evolution: Dict[str, float] = Field(default={}, description="성격 변화")
-    
-    # 인사이트
-    key_insights: List[str] = Field(..., description="주요 인사이트")
-    growth_areas: List[str] = Field(default=[], description="성장 영역")
-    recommendations: List[str] = Field(default=[], description="개인화 추천")
-    
-    # 메타데이터
-    last_updated: datetime = Field(..., description="마지막 업데이트")
-    reliability_score: float = Field(..., ge=0.0, le=1.0, description="신뢰도 점수")
+    """사용자 종합 인사이트 - 단순화"""
+    user_uid: str = Field(..., description="Firebase 사용자 UID")
+    summary: str = Field(..., description="요약")
+    emotional_wellbeing: Dict[str, Any] = Field(default={}, description="감정적 웰빙")
+    behavioral_patterns: List[str] = Field(default=[], description="행동 패턴")
+    recommendations: List[str] = Field(default=[], description="추천사항")
+    growth_opportunities: List[str] = Field(default=[], description="성장 기회")
+    generated_at: str = Field(..., description="생성 시간")
+
+
+class BatchAnalysisRequest(BaseModel):
+    """일괄 분석 요청 - 단순화"""
+    diary_entries: List[DiaryAnalysisRequest] = Field(..., description="분석할 일기 목록")
+    batch_id: Optional[str] = Field(None, description="배치 ID")
 
 
 class AnalysisHistoryItem(BaseModel):
-    """분석 이력 항목"""
+    """분석 이력 항목 - 단순화"""
     analysis_id: str
     diary_id: str
-    analysis_date: datetime
+    date: str
     primary_emotion: str
-    sentiment_score: float
-    confidence_score: float
-    insights_count: int
+    mood_score: float
+    themes: List[str]
 
 
 class AnalysisStatsResponse(BaseModel):
-    """분석 통계 응답"""
-    user_id: str
+    """분석 통계 - 단순화"""
+    user_uid: str
     total_analyses: int
-    analysis_period_days: int
-    
-    # 감정 통계
-    emotion_distribution: Dict[str, int] = Field(default={})
-    avg_sentiment_score: float
-    sentiment_trend: List[float] = Field(default=[])
-    
-    # 성격 통계
-    personality_consistency: float
-    dominant_traits: List[str] = Field(default=[])
-    
-    # 활동 통계
-    analysis_frequency: Dict[str, int] = Field(default={})
-    most_active_periods: List[str] = Field(default=[])
-    
-    # 인사이트 통계  
-    total_insights: int
-    insight_categories: Dict[str, int] = Field(default={})
+    this_month: int
+    avg_mood_score: float
+    most_common_emotion: str
+    emotional_diversity: float
+    consistency_score: float
+    growth_trend: str
+    streak_days: int
+    last_analysis: str
