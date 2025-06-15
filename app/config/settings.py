@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
     
     # CORS 설정
-    ALLOWED_ORIGINS: List[str] = Field(
+    ALLOWED_ORIGINS: Optional[List[str]] = Field(
         default=["http://localhost:3000", "http://localhost:8080"]
     )
     
@@ -78,7 +78,11 @@ class Settings(BaseSettings):
     @validator("ALLOWED_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v):
         """CORS origins 설정 검증"""
+        if v is None or v == "":
+            return ["http://localhost:3000", "http://localhost:8080"]
         if isinstance(v, str):
+            if v.strip() == "":
+                return ["http://localhost:3000", "http://localhost:8080"]
             return [i.strip() for i in v.split(",")]
         return v
     
