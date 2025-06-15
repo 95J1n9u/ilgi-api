@@ -377,3 +377,6 @@ def get_firebase_status() -> Dict[str, Any]:
         "project_id": settings.FIREBASE_PROJECT_ID[:10] + "..." if settings.FIREBASE_PROJECT_ID else None,
         "client_email": settings.FIREBASE_CLIENT_EMAIL[:20] + "..." if settings.FIREBASE_CLIENT_EMAIL else None,
     }
+
+
+
