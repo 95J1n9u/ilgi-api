@@ -82,7 +82,7 @@ def initialize_firebase():
                 firebase_app = firebase_admin.initialize_app(firebase_cred)
                 
                 # Firebase Admin SDK 버전 및 프로젝트 정보 로깅
-                logger.info(f"🔥 Firebase Admin SDK 버전: {firebase_admin.__version__ if hasattr(firebase_admin, '__version__') else 'Unknown'}')
+                logger.info(f"🔥 Firebase Admin SDK 버전: {firebase_admin.__version__ if hasattr(firebase_admin, '__version__') else 'Unknown'}")
                 logger.info(f"🏗️ 초기화된 프로젝트: {firebase_app.project_id}")
                 
                 firebase_initialized = True
