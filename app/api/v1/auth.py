@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.core.security import (
     create_access_token,
     get_current_user_from_firebase,
+    get_current_user_from_jwt,
     verify_firebase_token,
 )
 from app.schemas.user import UserResponse, TokenResponse
@@ -62,16 +63,16 @@ async def refresh_token(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
     """
-    토큰 갱신
+    JWT 토큰 갱신 - 기존 JWT 토큰으로 새로운 JWT 토큰 발급
     """
     try:
-        # 기존 토큰으로 사용자 정보 추출
-        user = await get_current_user_from_firebase(credentials)
+        # JWT 토큰으로 사용자 정보 추출
+        user = await get_current_user_from_jwt(credentials)
         
         # 새로운 액세스 토큰 생성
         new_access_token = create_access_token(
             data={
-                "sub": user["uid"],
+                "sub": user["user_id"],
                 "email": user.get("email"),
                 "name": user.get("name"),
             }
@@ -80,7 +81,12 @@ async def refresh_token(
         return TokenResponse(
             access_token=new_access_token,
             token_type="bearer",
-            user_info=user
+            user_info={
+                "uid": user["user_id"],
+                "email": user.get("email"),
+                "name": user.get("name"),
+                "email_verified": True,  # JWT 토큰에서는 이미 검증됨
+            }
         )
         
     except Exception as e:
@@ -93,17 +99,17 @@ async def refresh_token(
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(
-    current_user: Dict = Depends(get_current_user_from_firebase)
+    current_user: Dict = Depends(get_current_user_from_jwt)
 ):
     """
     현재 로그인된 사용자 정보 조회
     """
     return UserResponse(
-        uid=current_user["uid"],
+        uid=current_user["user_id"],
         email=current_user.get("email"),
         name=current_user.get("name"),
-        picture=current_user.get("picture"),
-        email_verified=current_user.get("email_verified", False),
+        picture=None,  # JWT에는 picture 정보 없음
+        email_verified=True,  # JWT 토큰이면 이미 검증됨
     )
 
 
@@ -120,13 +126,13 @@ async def logout():
 
 @router.get("/validate")
 async def validate_token(
-    current_user: Dict = Depends(get_current_user_from_firebase)
+    current_user: Dict = Depends(get_current_user_from_jwt)
 ):
     """
-    토큰 유효성 검증
+    JWT 토큰 유효성 검증
     """
     return {
         "valid": True,
-        "user_id": current_user["uid"],
+        "user_id": current_user["user_id"],
         "email": current_user.get("email")
     }

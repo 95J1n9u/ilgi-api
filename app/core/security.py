@@ -163,7 +163,13 @@ async def get_current_user_from_jwt(
             "email": payload.get("email"),
             "name": payload.get("name"),
         }
-    except JWTError:
+    except (JWTError, AuthenticationException) as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Could not validate JWT token: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",

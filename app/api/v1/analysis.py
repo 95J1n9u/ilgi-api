@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from app.api.deps import get_database, get_ai_service, get_emotion_service, get_personality_service
-from app.core.security import get_current_user_from_firebase
+from app.core.security import get_current_user_from_jwt
 from app.schemas.analysis import (
     DiaryAnalysisRequest,
     DiaryAnalysisResponse,
@@ -26,7 +26,7 @@ router = APIRouter()
 async def analyze_diary(
     request: DiaryAnalysisRequest,
     background_tasks: BackgroundTasks,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     ai_service: AIAnalysisService = Depends(get_ai_service),
     db: AsyncSession = Depends(get_database),
 ):
@@ -39,7 +39,7 @@ async def analyze_diary(
     """
     try:
         # 사용자 ID 설정
-        request.user_id = current_user["uid"]
+        request.user_id = current_user["user_id"]
         
         # AI 분석 실행
         analysis_result = await ai_service.analyze_diary(request, db)
@@ -47,7 +47,7 @@ async def analyze_diary(
         # 백그라운드에서 사용자 벡터 업데이트
         background_tasks.add_task(
             ai_service.update_user_vectors,
-            user_id=current_user["uid"],
+            user_id=current_user["user_id"],
             analysis_result=analysis_result,
             db=db
         )
@@ -64,7 +64,7 @@ async def analyze_diary(
 @router.get("/diary/{diary_id}", response_model=DiaryAnalysisResponse)
 async def get_analysis_result(
     diary_id: str,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     ai_service: AIAnalysisService = Depends(get_ai_service),
     db: AsyncSession = Depends(get_database),
 ):
@@ -74,7 +74,7 @@ async def get_analysis_result(
     try:
         analysis_result = await ai_service.get_analysis_result(
             diary_id=diary_id,
-            user_id=current_user["uid"],
+            user_id=current_user["user_id"],
             db=db
         )
         
@@ -99,7 +99,7 @@ async def get_analysis_result(
 async def analyze_batch(
     request: BatchAnalysisRequest,
     background_tasks: BackgroundTasks,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     ai_service: AIAnalysisService = Depends(),
 ):
     """
@@ -112,7 +112,7 @@ async def analyze_batch(
         background_tasks.add_task(
             ai_service.batch_analyze,
             diary_requests=request.diary_entries,
-            user_id=current_user["uid"]
+            user_id=current_user["user_id"]
         )
         
         return {
@@ -131,14 +131,14 @@ async def analyze_batch(
 @router.get("/emotions/{user_id}")
 async def get_user_emotions(
     user_id: str,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     emotion_service: EmotionAnalysisService = Depends(),
 ):
     """
     사용자 감정 패턴 조회
     """
     # 본인 데이터만 조회 가능
-    if user_id != current_user["uid"]:
+    if user_id != current_user["user_id"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -158,14 +158,14 @@ async def get_user_emotions(
 @router.get("/personality/{user_id}")
 async def get_user_personality(
     user_id: str,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     personality_service: PersonalityAnalysisService = Depends(),
 ):
     """
     사용자 성격 분석 결과 조회
     """
     # 본인 데이터만 조회 가능
-    if user_id != current_user["uid"]:
+    if user_id != current_user["user_id"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -185,14 +185,14 @@ async def get_user_personality(
 @router.get("/insights/{user_id}", response_model=UserInsightsResponse)
 async def get_user_insights(
     user_id: str,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     ai_service: AIAnalysisService = Depends(),
 ):
     """
     사용자 종합 인사이트 조회
     """
     # 본인 데이터만 조회 가능
-    if user_id != current_user["uid"]:
+    if user_id != current_user["user_id"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -214,14 +214,14 @@ async def get_analysis_history(
     user_id: str,
     limit: int = 20,
     offset: int = 0,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     ai_service: AIAnalysisService = Depends(),
 ):
     """
     분석 이력 조회
     """
     # 본인 데이터만 조회 가능
-    if user_id != current_user["uid"]:
+    if user_id != current_user["user_id"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -245,7 +245,7 @@ async def get_analysis_history(
 @router.delete("/diary/{diary_id}")
 async def delete_analysis(
     diary_id: str,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     ai_service: AIAnalysisService = Depends(),
 ):
     """
@@ -254,7 +254,7 @@ async def delete_analysis(
     try:
         success = await ai_service.delete_analysis(
             diary_id=diary_id,
-            user_id=current_user["uid"]
+            user_id=current_user["user_id"]
         )
         
         if not success:
@@ -277,14 +277,14 @@ async def delete_analysis(
 @router.get("/stats/{user_id}")
 async def get_analysis_stats(
     user_id: str,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     ai_service: AIAnalysisService = Depends(),
 ):
     """
     분석 통계 조회
     """
     # 본인 데이터만 조회 가능
-    if user_id != current_user["uid"]:
+    if user_id != current_user["user_id"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"

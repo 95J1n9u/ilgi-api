@@ -5,7 +5,7 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.security import get_current_user_from_firebase
+from app.core.security import get_current_user_from_jwt
 from app.schemas.matching import (
     MatchingRequest,
     CompatibilityRequest,
@@ -20,7 +20,7 @@ router = APIRouter()
 @router.post("/candidates", response_model=MatchingCandidatesResponse)
 async def get_matching_candidates(
     request: MatchingRequest,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     matching_service: MatchingService = Depends(),
 ):
     """
@@ -32,7 +32,7 @@ async def get_matching_candidates(
     """
     try:
         # 현재 사용자 ID 설정
-        user_id = current_user["uid"]
+        user_id = current_user["user_id"]
         
         # 매칭 후보 검색
         candidates = await matching_service.find_matching_candidates(
@@ -59,7 +59,7 @@ async def get_matching_candidates(
 @router.post("/compatibility", response_model=CompatibilityResponse)
 async def calculate_compatibility(
     request: CompatibilityRequest,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     matching_service: MatchingService = Depends(),
 ):
     """
@@ -68,7 +68,7 @@ async def calculate_compatibility(
     - **target_user_id**: 호환성을 계산할 상대방 사용자 ID
     """
     try:
-        user_id = current_user["uid"]
+        user_id = current_user["user_id"]
         target_user_id = request.target_user_id
         
         # 자기 자신과의 호환성 계산 방지
@@ -98,7 +98,7 @@ async def calculate_compatibility(
 @router.get("/profile/{user_id}")
 async def get_matching_profile(
     user_id: str,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     matching_service: MatchingService = Depends(),
 ):
     """
@@ -106,7 +106,7 @@ async def get_matching_profile(
     """
     try:
         # 본인 프로필이거나 매칭 허용된 경우만 조회 가능
-        current_user_id = current_user["uid"]
+        current_user_id = current_user["user_id"]
         
         if user_id != current_user_id:
             # TODO: 매칭 허용 여부 확인 로직 추가
@@ -134,14 +134,14 @@ async def get_matching_profile(
 @router.put("/preferences")
 async def update_matching_preferences(
     preferences: Dict,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     matching_service: MatchingService = Depends(),
 ):
     """
     매칭 선호도 설정 업데이트
     """
     try:
-        user_id = current_user["uid"]
+        user_id = current_user["user_id"]
         
         success = await matching_service.update_matching_preferences(
             user_id=user_id,
@@ -170,14 +170,14 @@ async def update_matching_preferences(
 
 @router.get("/preferences")
 async def get_matching_preferences(
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     matching_service: MatchingService = Depends(),
 ):
     """
     매칭 선호도 설정 조회
     """
     try:
-        user_id = current_user["uid"]
+        user_id = current_user["user_id"]
         preferences = await matching_service.get_matching_preferences(user_id)
         
         return {
@@ -196,14 +196,14 @@ async def get_matching_preferences(
 async def get_matching_history(
     limit: int = 20,
     offset: int = 0,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     matching_service: MatchingService = Depends(),
 ):
     """
     매칭 이력 조회
     """
     try:
-        user_id = current_user["uid"]
+        user_id = current_user["user_id"]
         
         history = await matching_service.get_matching_history(
             user_id=user_id,
@@ -227,14 +227,14 @@ async def get_matching_history(
 @router.post("/feedback")
 async def submit_matching_feedback(
     feedback_data: Dict,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     matching_service: MatchingService = Depends(),
 ):
     """
     매칭 피드백 제출
     """
     try:
-        user_id = current_user["uid"]
+        user_id = current_user["user_id"]
         
         success = await matching_service.submit_feedback(
             user_id=user_id,
@@ -264,14 +264,14 @@ async def submit_matching_feedback(
 @router.get("/analytics/{user_id}")
 async def get_matching_analytics(
     user_id: str,
-    current_user: Dict = Depends(get_current_user_from_firebase),
+    current_user: Dict = Depends(get_current_user_from_jwt),
     matching_service: MatchingService = Depends(),
 ):
     """
     매칭 분석 데이터 조회
     """
     # 본인 데이터만 조회 가능
-    if user_id != current_user["uid"]:
+    if user_id != current_user["user_id"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
