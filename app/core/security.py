@@ -65,11 +65,29 @@ def initialize_firebase():
             logger.info(f"🔑 Private Key Length: {len(settings.FIREBASE_PRIVATE_KEY) if settings.FIREBASE_PRIVATE_KEY else 0}")
             logger.info(f"🆔 Client ID: {settings.FIREBASE_CLIENT_ID}")
             
+            # Private Key 다양한 형식 처리
+            private_key = settings.FIREBASE_PRIVATE_KEY
+            
+            # Railway 환경변수에서 발생할 수 있는 다양한 이스케이프 형식 처리
+            if private_key:
+                # 1. 이중 백슬래시 처리 (\\n → \n)
+                private_key = private_key.replace('\\\\n', '\n')
+                # 2. 백슬래시 n 처리 (\n → 실제 개행)
+                private_key = private_key.replace('\\n', '\n')
+                # 3. 리터럴 백슬래시 n 문자열 처리
+                private_key = private_key.replace('\\\\\\n', '\n')
+                # 4. JSON 이스케이프 처리
+                private_key = private_key.replace('\\"', '"')
+                
+                logger.info(f"🔑 Private Key 처리 후 길이: {len(private_key)}")
+                logger.info(f"🔑 Private Key 시작: {private_key[:50]}...")
+                logger.info(f"🔑 Private Key 끝: ...{private_key[-50:]}")
+            
             firebase_cred = credentials.Certificate({
                 "type": "service_account",
                 "project_id": settings.FIREBASE_PROJECT_ID,
                 "private_key_id": settings.FIREBASE_PRIVATE_KEY_ID,
-                "private_key": settings.FIREBASE_PRIVATE_KEY.replace('\\\\n', '\n').replace('\\n', '\n'),  # 개행 문자 처리
+                "private_key": private_key,
                 "client_email": settings.FIREBASE_CLIENT_EMAIL,
                 "client_id": settings.FIREBASE_CLIENT_ID,
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
