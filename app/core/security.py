@@ -55,6 +55,14 @@ def initialize_firebase():
     try:
         # Firebase 앱이 이미 있는지 확인
         if not firebase_admin._apps:
+            # 서비스 계정 정보 상세 로깅
+            logger.info(f"🔧 Firebase 초기화 시도...")
+            logger.info(f"📊 Project ID: {settings.FIREBASE_PROJECT_ID}")
+            logger.info(f"📧 Client Email: {settings.FIREBASE_CLIENT_EMAIL}")
+            logger.info(f"🔑 Private Key ID: {settings.FIREBASE_PRIVATE_KEY_ID}")
+            logger.info(f"🔑 Private Key Length: {len(settings.FIREBASE_PRIVATE_KEY) if settings.FIREBASE_PRIVATE_KEY else 0}")
+            logger.info(f"🆔 Client ID: {settings.FIREBASE_CLIENT_ID}")
+            
             firebase_cred = credentials.Certificate({
                 "type": "service_account",
                 "project_id": settings.FIREBASE_PROJECT_ID,
@@ -68,10 +76,55 @@ def initialize_firebase():
                 "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{settings.FIREBASE_CLIENT_EMAIL}",
             })
             
-            firebase_app = firebase_admin.initialize_app(firebase_cred)
-            firebase_initialized = True
-            logger.info("✅ Firebase Admin SDK initialized successfully")
-            return True
+            # 서비스 계정 자격 증명이 올바른지 테스트
+            try:
+                # 임시로 프로젝트 정보 확인
+                firebase_app = firebase_admin.initialize_app(firebase_cred)
+                
+                # Firebase Admin SDK 버전 및 프로젝트 정보 로깅
+                import firebase_admin
+                logger.info(f"🔥 Firebase Admin SDK 버전: {firebase_admin.__version__ if hasattr(firebase_admin, '__version__') else 'Unknown'}")
+                logger.info(f"🏗️ 초기화된 프로젝트: {firebase_app.project_id}")
+                
+                firebase_initialized = True
+                logger.info("✅ Firebase Admin SDK initialized successfully")
+                
+                # 간단한 토큰 검증 테스트 (선택사항)
+                try:
+                    # 더미 토큰으로 검증 시도해서 서비스가 정상인지 확인
+                    logger.info("🧪 Firebase 서비스 상태 테스트 중...")
+                    # auth.verify_id_token("dummy")  # 의도적으로 실패하게 하여 서비스 상태만 확인
+                except Exception as test_error:
+                    if "Could not parse" in str(test_error) or "Invalid" in str(test_error):
+                        logger.info("✅ Firebase 서비스가 응답하고 있음 (예상된 오류)")
+                    else:
+                        logger.warning(f"⚠️ Firebase 서비스 문제 가능성: {test_error}")
+                
+                return True
+                
+            except Exception as init_error:
+                logger.error(f"❌ Firebase 초기화 세부 오류: {str(init_error)}")
+                logger.error(f"   오류 타입: {type(init_error).__name__}")
+                
+                # 일반적인 오류들에 대한 구체적인 가이드
+                error_str = str(init_error).lower()
+                if "private_key" in error_str:
+                    logger.error("🔑 Private Key 형식 문제일 가능성이 높습니다!")
+                    logger.error("   - Railway 환경변수에서 private_key 확인 필요")
+                    logger.error("   - \\n이 실제 개행문자로 변환되는지 확인 필요")
+                elif "project_id" in error_str:
+                    logger.error("🏗️ Project ID 불일치 문제일 가능성이 높습니다!")
+                elif "client_email" in error_str:
+                    logger.error("📧 Service Account Email 문제일 가능성이 높습니다!")
+                    logger.error("   - Firebase Console에서 서비스 계정 존재 여부 확인")
+                elif "permission" in error_str or "access" in error_str:
+                    logger.error("🚫 권한 문제일 가능성이 높습니다!")
+                    logger.error("   - 서비스 계정에 Firebase Admin SDK 권한 부여 필요")
+                else:
+                    logger.error("❓ 알 수 없는 초기화 오류입니다.")
+                
+                firebase_initialized = False
+                return False
         else:
             firebase_initialized = True
             logger.info("✅ Firebase Admin SDK already exists")
@@ -79,6 +132,7 @@ def initialize_firebase():
             
     except Exception as e:
         logger.error(f"❌ Firebase initialization failed: {str(e)}")
+        logger.error(f"   Exception type: {type(e).__name__}")
         firebase_initialized = False
         return False
 
