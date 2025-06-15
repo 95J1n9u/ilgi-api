@@ -67,15 +67,30 @@ def create_access_token(
     return encoded_jwt
 
 
-def verify_access_token(token: str) -> Dict[str, Any]:
+async def verify_access_token(token: str) -> Dict[str, Any]:
     """JWT 액세스 토큰 검증"""
     try:
+        # 디버깅용 로깅
+        print(f"🔑 JWT 토큰 검증 시작: {token[:50]}...")
+        print(f"🔑 SECRET_KEY 상태: {bool(settings.SECRET_KEY)}")
+        print(f"🔑 ALGORITHM: {settings.ALGORITHM}")
+        
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
+        
+        print(f"✅ JWT 토큰 검증 성공: {payload}")
         return payload
-    except JWTError:
-        raise AuthenticationException("Invalid access token")
+        
+    except jwt.ExpiredSignatureError:
+        print("❌ JWT 토큰 만료")
+        raise AuthenticationException("Token has expired")
+    except jwt.InvalidTokenError as e:
+        print(f"❌ JWT 토큰 오류: {e}")
+        raise AuthenticationException(f"Invalid token: {str(e)}")
+    except Exception as e:
+        print(f"❌ JWT 검증 예외: {e}")
+        raise AuthenticationException(f"Token verification failed: {str(e)}")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -152,24 +167,32 @@ async def get_current_user_from_jwt(
     """JWT 토큰으로부터 현재 사용자 정보 추출"""
     try:
         token = credentials.credentials
-        payload = verify_access_token(token)
+        print(f"🔍 JWT 사용자 인증 시작: {token[:30]}...")
+        
+        payload = await verify_access_token(token)
         
         user_id: str = payload.get("sub")
         if user_id is None:
-            raise AuthenticationException("Invalid token payload")
+            raise AuthenticationException("Invalid token payload: missing user ID")
         
-        return {
+        user_info = {
             "user_id": user_id,
             "email": payload.get("email"),
             "name": payload.get("name"),
         }
+        
+        print(f"✅ JWT 사용자 인증 성공: {user_info}")
+        return user_info
+        
     except (JWTError, AuthenticationException) as e:
+        print(f"❌ JWT 사용자 인증 실패: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Could not validate JWT token: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
+        print(f"❌ JWT 사용자 인증 예외: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",

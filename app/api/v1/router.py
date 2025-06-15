@@ -3,7 +3,7 @@ API v1 라우터 통합
 """
 from fastapi import APIRouter
 
-from app.api.v1 import analysis, auth, matching
+from app.api.v1 import analysis, auth, matching, debug
 
 api_router = APIRouter()
 
@@ -11,6 +11,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["인증"])
 api_router.include_router(analysis.router, prefix="/analysis", tags=["AI 분석"])
 api_router.include_router(matching.router, prefix="/matching", tags=["매칭"])
+api_router.include_router(debug.router, prefix="/debug", tags=["디버깅"])
 
 
 @api_router.get("/")
