@@ -96,8 +96,33 @@ async def verify_firebase_token(token: str) -> Dict[str, Any]:
         raise AuthenticationException("Firebase authentication service is not available")
     
     try:
+        # 토큰 정제 - 공백 제거 및 Base64 패딩 문제 해결
+        clean_token = token.strip()
+        
+        # 토큰 기본 정보 로깅
+        logger.info(f"🎫 토큰 길이: {len(clean_token)}")
+        logger.info(f"🎫 토큰 부분 개수: {len(clean_token.split('.'))}")
+        
+        # JWT 토큰은 3개 부분으로 구성되어야 함
+        token_parts = clean_token.split('.')
+        if len(token_parts) != 3:
+            logger.error(f"❌ 잘못된 토큰 형식: {len(token_parts)}개 부분 (정상: 3개)")
+            raise AuthenticationException(f"Invalid token format: expected 3 parts, got {len(token_parts)}")
+        
+        # 각 부분의 길이 확인 및 패딩 추가 (필요한 경우)
+        padded_parts = []
+        for i, part in enumerate(token_parts):
+            # Base64 패딩 추가 (길이가 4의 배수가 되도록)
+            while len(part) % 4 != 0:
+                part += '='
+            padded_parts.append(part)
+            logger.info(f"🔧 Part {i}: 원본 길이 {len(token_parts[i])}, 패딩 후 길이 {len(part)}")
+        
+        # 패딩이 추가된 토큰 재구성
+        padded_token = '.'.join(padded_parts)
+        
         # Firebase Admin SDK로 토큰 검증
-        decoded_token = auth.verify_id_token(token)
+        decoded_token = auth.verify_id_token(padded_token)
         logger.info(f"✅ Firebase 토큰 검증 성공: uid={decoded_token.get('uid')}")
         return decoded_token
         

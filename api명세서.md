@@ -1,27 +1,61 @@
-# AI 일기 분석 백엔드 API 명세서
+# 🤖 AI 일기 분석 백엔드 API 명세서
 
-## 📋 **기본 정보**
+## 📋 **개요**
 
-- **API 이름**: AI Diary Analysis Backend
-- **버전**: 1.0.0
-- **Base URL**: `https://ilgi-api-production.up.railway.app/`
-- **인증 방식**: Firebase Authentication + JWT Bearer Token
-- **Content-Type**: `application/json`
+**프로젝트명:** AI Diary Analysis Backend  
+**버전:** v1.0.0  
+**인증 방식:** Firebase Admin SDK  
+**베이스 URL:** `https://ilgi-api-production.up.railway.app`  
+**API 문서:** `https://ilgi-api-production.up.railway.app/docs`  
 
-## 🔗 **Base Endpoints**
+**주요 기능:**
+- 🔥 Firebase 기반 사용자 인증
+- 📝 AI 일기 분석 (감정, 성격, 키워드)
+- 💕 사용자 매칭 시스템
+- 📊 분석 통계 및 인사이트
+- 🔍 실시간 모니터링 및 디버깅
 
-### 🏠 **Root Endpoint**
+---
+
+## 🔐 **인증 시스템**
+
+### **인증 방식**
+- **Firebase ID Token** 필수
+- **Authorization 헤더:** `Bearer {firebase_id_token}`
+- **토큰 획득:** Flutter Firebase Auth SDK 사용
+
+### **Firebase 토큰 예시**
+```dart
+// Flutter에서 토큰 획득
+User? user = FirebaseAuth.instance.currentUser;
+String? token = await user?.getIdToken();
+
+// API 호출 시 헤더에 포함
+headers: {
+  'Authorization': 'Bearer $token',
+  'Content-Type': 'application/json',
+}
+```
+
+---
+
+## 📚 **API 엔드포인트**
+
+### **🌐 기본 엔드포인트 (인증 불필요)**
+
+#### **1. 루트 엔드포인트**
 ```http
 GET /
 ```
-서버 기본 정보 및 Flutter 앱 연동 상태 확인
-
-**응답 예시:**
+**설명:** 서버 기본 정보 조회  
+**인증:** 불필요  
+**응답:**
 ```json
 {
   "message": "🤖 AI Diary Analysis Backend",
   "version": "1.0.0",
   "environment": "production",
+  "authentication": "Firebase Admin SDK",
   "docs": "/docs",
   "health": "/health",
   "api_base": "/api/v1",
@@ -41,13 +75,13 @@ GET /
 }
 ```
 
-### 🔍 **Health Check**
+#### **2. 헬스체크**
 ```http
 GET /health
 ```
-서버 상태 및 서비스 점검
-
-**응답 예시:**
+**설명:** 서버 상태 및 서비스 가용성 확인  
+**인증:** 불필요  
+**응답:**
 ```json
 {
   "status": "healthy",
@@ -58,9 +92,10 @@ GET /health
   "services": {
     "gemini_api": true,
     "firebase": true,
-    "database": true,
-    "redis": true
+    "database": false,
+    "redis": false
   },
+  "authentication": "Firebase Admin SDK",
   "ready_for_flutter": true,
   "deployment": {
     "platform": "Railway",
@@ -70,18 +105,19 @@ GET /health
 }
 ```
 
-### 📱 **Flutter 연결 테스트**
+#### **3. Flutter 연결 테스트**
 ```http
 GET /api/v1/flutter/test
 ```
-Flutter 앱과의 연결 상태 확인
-
+**설명:** Flutter 앱 연결 테스트  
+**인증:** 불필요  
 **응답:**
 ```json
 {
   "status": "success",
   "message": "Flutter 앱과 백엔드 연결 성공!",
   "timestamp": "2025-06-14T15:00:00Z",
+  "authentication": "Firebase Admin SDK",
   "server_info": {
     "name": "AI Diary Analysis Backend",
     "version": "1.0.0",
@@ -90,21 +126,22 @@ Flutter 앱과의 연결 상태 확인
 }
 ```
 
-### 📊 **API 상태**
+#### **4. API 상태 확인**
 ```http
 GET /api/v1/status
 ```
-API 서비스별 상태 확인
-
+**설명:** API 서비스별 상태 확인  
+**인증:** 불필요  
 **응답:**
 ```json
 {
   "api_status": "operational",
+  "authentication_method": "Firebase Admin SDK",
   "services": {
     "gemini_ai": "operational",
-    "firebase_auth": "operational", 
-    "database": "operational",
-    "redis_cache": "operational"
+    "firebase_auth": "operational",
+    "database": "unavailable",
+    "redis_cache": "unavailable"
   },
   "last_check": "2025-06-14T15:00:00Z"
 }
@@ -112,1024 +149,939 @@ API 서비스별 상태 확인
 
 ---
 
-## 🔐 **인증 API** (`/api/v1/auth`)
+### **🔥 Firebase 인증 API**
 
-### 🔑 **Firebase 토큰 검증**
+#### **1. Firebase 토큰 검증**
 ```http
 POST /api/v1/auth/verify-token
 ```
-Firebase ID 토큰을 검증하고 내부 JWT 토큰 발급
-
-**Headers:**
+**설명:** Firebase ID 토큰 검증 및 사용자 정보 반환  
+**인증:** Firebase ID 토큰 필요  
+**헤더:**
+```http
+Authorization: Bearer {firebase_id_token}
 ```
-Authorization: Bearer <firebase_id_token>
-```
-
 **응답:**
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "bearer",
-  "user_info": {
-    "uid": "firebase_user_id",
+  "message": "Token verified successfully",
+  "user": {
+    "uid": "firebase_user_uid",
     "email": "user@example.com",
     "name": "사용자 이름",
-    "email_verified": true
-  }
+    "picture": "https://...",
+    "email_verified": true,
+    "provider": "google.com"
+  },
+  "token_type": "firebase_id_token",
+  "expires_at": 1735574400,
+  "issued_at": 1735570800
 }
 ```
 
-### 🔄 **토큰 갱신**
+#### **2. 토큰 갱신 안내**
 ```http
 POST /api/v1/auth/refresh
 ```
-기존 토큰으로 새로운 액세스 토큰 발급
-
-**Headers:**
-```
-Authorization: Bearer <current_token>
-```
-
+**설명:** Firebase 토큰 갱신 안내 (클라이언트에서 처리)  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "bearer",
-  "user_info": {
-    "uid": "firebase_user_id",
-    "email": "user@example.com",
-    "name": "사용자 이름"
-  }
+  "message": "Token refresh should be handled by Firebase SDK on client side",
+  "user_uid": "firebase_user_uid",
+  "instruction": "Call firebase.auth().currentUser.getIdToken(true) to get fresh token",
+  "current_token_valid": true
 }
 ```
 
-### 👤 **현재 사용자 정보**
+#### **3. 현재 사용자 정보**
 ```http
 GET /api/v1/auth/me
 ```
-현재 로그인된 사용자 정보 조회
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
+**설명:** 현재 로그인된 사용자 정보 조회  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "uid": "firebase_user_id",
+  "uid": "firebase_user_uid",
   "email": "user@example.com",
   "name": "사용자 이름",
-  "picture": "https://example.com/photo.jpg",
+  "picture": "https://...",
   "email_verified": true
 }
 ```
 
-### 🚪 **로그아웃**
-```http
-POST /api/v1/auth/logout
-```
-로그아웃 (클라이언트에서 토큰 제거)
-
-**응답:**
-```json
-{
-  "message": "Successfully logged out",
-  "detail": "Please remove the token from client storage"
-}
-```
-
-### ✅ **토큰 유효성 검증**
+#### **4. 토큰 유효성 검증**
 ```http
 GET /api/v1/auth/validate
 ```
-토큰 유효성 검증
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
+**설명:** Firebase 토큰 유효성 검증  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
   "valid": true,
-  "user_id": "firebase_user_id",
-  "email": "user@example.com"
+  "uid": "firebase_user_uid",
+  "email": "user@example.com",
+  "email_verified": true,
+  "provider": "google.com"
+}
+```
+
+#### **5. 로그아웃**
+```http
+POST /api/v1/auth/logout
+```
+**설명:** 로그아웃 안내 (클라이언트에서 처리)  
+**인증:** 불필요  
+**응답:**
+```json
+{
+  "message": "Logout should be handled by Firebase SDK on client side",
+  "instruction": "Call firebase.auth().signOut() to logout user",
+  "server_action": "No server-side session to clear"
+}
+```
+
+#### **6. 인증 서비스 상태**
+```http
+GET /api/v1/auth/status
+```
+**설명:** Firebase 인증 서비스 상태 확인  
+**인증:** 불필요  
+**응답:**
+```json
+{
+  "service": "Firebase Authentication",
+  "status": "operational",
+  "firebase_config": {
+    "initialized": true,
+    "use_firebase": true,
+    "project_id": "your-proj...",
+    "client_email": "firebase-adminsdk..."
+  },
+  "available_endpoints": [
+    "/verify-token - Firebase ID 토큰 검증",
+    "/refresh - 토큰 갱신 안내",
+    "/me - 사용자 정보 조회",
+    "/validate - 토큰 유효성 검증",
+    "/logout - 로그아웃 안내",
+    "/status - 서비스 상태 확인"
+  ]
 }
 ```
 
 ---
 
-## 🧠 **AI 분석 API** (`/api/v1/analysis`)
+### **📝 일기 분석 API**
 
-### 📝 **일기 분석**
+#### **1. 일기 AI 분석**
 ```http
 POST /api/v1/analysis/diary
 ```
-일기 텍스트의 종합 AI 분석
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-Content-Type: application/json
-```
-
-**요청 Body:**
+**설명:** 일기 텍스트 AI 분석 (감정, 성격, 키워드 추출)  
+**인증:** Firebase 토큰 필요  
+**요청 바디:**
 ```json
 {
-  "diary_id": "diary_20241214_001",
-  "content": "오늘은 친구들과 카페에서 즐거운 시간을 보냈다. 새로운 프로젝트에 대해 이야기하면서 많은 아이디어를 얻었고, 앞으로의 계획에 대해 설레는 마음이 든다.",
+  "diary_id": "diary_12345",
+  "content": "오늘은 정말 좋은 하루였다. 친구들과 카페에서 즐거운 시간을 보냈고, 새로운 책도 읽었다.",
   "metadata": {
-    "date": "2024-12-14",
+    "date": "2025-06-14",
     "weather": "맑음",
-    "mood": "기쁨",
-    "location": "카페",
-    "activities": ["친구 만남", "프로젝트 회의"],
-    "tags": ["사회활동", "계획"]
+    "location": "서울",
+    "activities": ["친구만남", "독서", "카페"]
   }
 }
 ```
-
 **응답:**
 ```json
 {
-  "diary_id": "diary_20241214_001",
-  "analysis_id": "analysis_abc123",
-  "user_id": "firebase_user_id",
-  "status": "completed",
+  "analysis_id": "analysis_1735570800",
+  "diary_id": "diary_12345",
+  "user_uid": "firebase_user_uid",
+  "content": "오늘은 정말 좋은 하루였다...",
   "emotion_analysis": {
-    "primary_emotion": "joy",
-    "secondary_emotions": ["excitement", "hope"],
-    "emotion_scores": [
-      {
-        "emotion": "joy",
-        "score": 0.85,
-        "confidence": 0.9
-      },
-      {
-        "emotion": "excitement", 
-        "score": 0.72,
-        "confidence": 0.8
-      }
-    ],
-    "sentiment_score": 0.78,
-    "emotional_intensity": 0.75,
-    "emotional_stability": 0.82
+    "primary_emotion": "기쁨",
+    "emotions": {
+      "기쁨": 0.7,
+      "만족": 0.5,
+      "평온": 0.3,
+      "설렘": 0.2
+    },
+    "sentiment_score": 0.8,
+    "confidence": 0.9
   },
-  "personality_analysis": {
-    "mbti_indicators": {
-      "E": 0.75, "I": 0.25,
-      "S": 0.45, "N": 0.55,
-      "T": 0.35, "F": 0.65,
-      "J": 0.60, "P": 0.40
-    },
-    "big5_traits": {
-      "openness": 0.78,
-      "conscientiousness": 0.68,
-      "extraversion": 0.75,
-      "agreeableness": 0.72,
-      "neuroticism": 0.25
-    },
-    "predicted_mbti": "ENFJ",
-    "personality_summary": [
-      "사회적 상호작용을 즐기는 외향적 성향",
-      "미래 가능성을 추구하는 직관적 사고",
-      "인간관계를 중시하는 감정형 의사결정",
-      "계획적이고 체계적인 판단형 성향"
-    ],
-    "confidence_level": 0.82
+  "personality_insights": {
+    "openness": 0.7,
+    "conscientiousness": 0.6,
+    "extraversion": 0.5,
+    "agreeableness": 0.8,
+    "neuroticism": 0.2,
+    "dominant_traits": ["낙관적", "사교적", "성실함"]
   },
-  "keyword_extraction": {
-    "keywords": ["친구", "카페", "프로젝트", "아이디어", "계획"],
-    "topics": ["사회활동", "업무", "미래계획"],
-    "entities": ["카페"],
-    "themes": ["인간관계", "성장", "협업"]
-  },
-  "lifestyle_patterns": {
-    "activity_patterns": {
-      "사회활동": 0.8,
-      "업무관련": 0.7,
-      "학습": 0.6
-    },
-    "social_patterns": {
-      "친구만남": 0.9,
-      "협업": 0.8
-    },
-    "time_patterns": {
-      "오후활동": 0.8
-    },
-    "interest_areas": ["프로젝트", "아이디어", "계획"],
-    "values_orientation": {
-      "성장": 0.8,
-      "관계": 0.9
-    }
-  },
-  "insights": [
-    "사회적 상호작용을 통해 에너지를 얻는 성향이 강합니다",
-    "미래 지향적 사고와 계획 수립에 적극적입니다",
-    "협업과 아이디어 교류를 중시하는 특성을 보입니다"
-  ],
+  "themes": ["일상", "관계", "성장"],
+  "keywords": ["친구", "즐거움", "카페", "대화"],
+  "mood_score": 8.5,
+  "stress_level": 2.0,
+  "life_satisfaction": 8.0,
   "recommendations": [
-    "현재의 긍정적 에너지를 유지하며 프로젝트를 진행하세요",
-    "친구들과의 정기적인 만남을 통해 지속적인 영감을 얻으세요",
-    "구체적인 실행 계획을 세워 아이디어를 현실화해보세요"
+    "현재의 긍정적인 마음가짐을 유지하세요",
+    "친구들과의 시간을 더 많이 가져보세요",
+    "새로운 취미나 활동을 시도해보는 것도 좋겠습니다"
   ],
-  "analysis_version": "1.0",
-  "processing_time": 2.34,
-  "confidence_score": 0.82,
-  "processed_at": "2024-12-14T15:30:00Z"
+  "created_at": "2025-06-14T15:00:00Z",
+  "processed_by": "gemini-1.5-flash"
 }
 ```
 
-### 📄 **분석 결과 조회**
+#### **2. 분석 결과 조회**
 ```http
 GET /api/v1/analysis/diary/{diary_id}
 ```
-특정 일기의 분석 결과 조회
+**설명:** 특정 일기의 분석 결과 조회  
+**인증:** Firebase 토큰 필요  
+**경로 파라미터:**
+- `diary_id`: 일기 ID
+**응답:** 일기 분석과 동일한 형태
 
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
-**응답:** 위 일기 분석 응답과 동일
-
-### 📊 **일괄 분석** (관리자 전용)
+#### **3. 감정 패턴 조회**
 ```http
-POST /api/v1/analysis/batch
+GET /api/v1/analysis/emotions
 ```
-여러 일기를 한 번에 분석 (백그라운드 처리)
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-Content-Type: application/json
-```
-
-**요청 Body:**
-```json
-{
-  "diary_entries": [
-    {
-      "diary_id": "diary_001",
-      "content": "일기 내용 1...",
-      "metadata": {}
-    },
-    {
-      "diary_id": "diary_002", 
-      "content": "일기 내용 2...",
-      "metadata": {}
-    }
-  ],
-  "batch_options": {
-    "priority": "normal"
-  }
-}
-```
-
+**설명:** 사용자의 감정 패턴 및 추이 조회  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "message": "Batch analysis started",
-  "total_entries": 2,
-  "status": "processing"
-}
-```
-
-### 😊 **사용자 감정 패턴 조회**
-```http
-GET /api/v1/analysis/emotions/{user_id}
-```
-사용자의 감정 패턴 분석 결과
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
-**응답:**
-```json
-{
-  "user_id": "firebase_user_id",
-  "dominant_emotions": ["joy", "hope", "excitement"],
+  "user_uid": "firebase_user_uid",
+  "period": "last_30_days",
+  "dominant_emotions": ["기쁨", "만족", "평온"],
   "emotion_trends": {
-    "joy": [0.6, 0.7, 0.8, 0.75],
-    "sadness": [0.3, 0.2, 0.1, 0.15]
+    "기쁨": [0.6, 0.7, 0.8, 0.7, 0.9],
+    "슬픔": [0.1, 0.2, 0.1, 0.0, 0.1],
+    "분노": [0.0, 0.1, 0.0, 0.1, 0.0],
+    "불안": [0.2, 0.1, 0.3, 0.2, 0.1]
   },
-  "weekly_patterns": {
-    "Monday": {"joy": 0.6, "stress": 0.4},
-    "Friday": {"joy": 0.8, "excitement": 0.7}
-  },
-  "monthly_patterns": {
-    "2024-12": {"avg_sentiment": 0.72, "stability": 0.8}
-  }
+  "average_sentiment": 0.75,
+  "mood_stability": 0.8,
+  "last_updated": "2025-06-14T15:00:00Z"
 }
 ```
 
-### 🧑‍🎓 **사용자 성격 분석 조회**
+#### **4. 성격 분석 조회**
 ```http
-GET /api/v1/analysis/personality/{user_id}
+GET /api/v1/analysis/personality
 ```
-사용자의 종합 성격 분석 결과
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
+**설명:** 사용자의 성격 분석 결과 조회  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "user_id": "firebase_user_id",
-  "overall_mbti": "ENFJ",
-  "overall_big5": {
-    "openness": 0.75,
-    "conscientiousness": 0.68,
-    "extraversion": 0.72,
-    "agreeableness": 0.78,
-    "neuroticism": 0.28
+  "user_uid": "firebase_user_uid",
+  "big_five": {
+    "openness": 0.7,
+    "conscientiousness": 0.6,
+    "extraversion": 0.5,
+    "agreeableness": 0.8,
+    "neuroticism": 0.2
   },
-  "personality_traits": [
-    "사교적이고 활동적인 성향",
-    "창의적이고 혁신적인 아이디어를 추구",
-    "인간관계와 가치를 중시하는 감정적 판단"
-  ],
-  "mbti_consistency": 0.85,
-  "confidence_level": 0.82,
-  "analysis_count": 15,
-  "last_updated": "2024-12-14T15:30:00Z"
+  "personality_type": "ENFP",
+  "dominant_traits": ["낙관적", "창의적", "사교적", "공감능력"],
+  "growth_areas": ["계획성", "집중력"],
+  "communication_style": "감정적이고 표현적",
+  "stress_response": "사회적 지지 추구",
+  "motivation_factors": ["새로운 경험", "인간관계", "창의적 표현"],
+  "last_updated": "2025-06-14T15:00:00Z"
 }
 ```
 
-### 💡 **사용자 종합 인사이트**
+#### **5. 종합 인사이트**
 ```http
-GET /api/v1/analysis/insights/{user_id}
+GET /api/v1/analysis/insights
 ```
-사용자의 종합 분석 인사이트
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
+**설명:** 사용자의 종합 인사이트 및 추천사항  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "user_id": "firebase_user_id",
-  "analysis_period": {
-    "start_date": "2024-11-01",
-    "end_date": "2024-12-14"
+  "user_uid": "firebase_user_uid",
+  "summary": "전반적으로 긍정적인 감정 상태를 유지하고 있으며, 사회적 관계에서 에너지를 얻는 성향이 강합니다.",
+  "emotional_wellbeing": {
+    "score": 8.2,
+    "trend": "improving",
+    "key_factors": ["친구와의 만남", "새로운 활동", "창의적 취미"]
   },
-  "total_entries": 25,
-  "overall_emotion_pattern": {
-    "primary_emotion": "joy",
-    "average_sentiment": 0.68,
-    "emotional_stability": 0.75
-  },
-  "personality_profile": {
-    "mbti_type": "ENFJ",
-    "consistency": 0.85,
-    "dominant_traits": ["외향적", "직관적", "감정형"]
-  },
-  "lifestyle_summary": {
-    "activity_level": "high",
-    "social_engagement": 0.8,
-    "interest_diversity": 0.7
-  },
-  "emotion_trends": {
-    "joy": [0.6, 0.65, 0.7, 0.75],
-    "stress": [0.4, 0.35, 0.3, 0.25]
-  },
-  "personality_evolution": {
-    "extraversion_change": 0.05,
-    "openness_change": 0.02
-  },
-  "key_insights": [
-    "지속적으로 긍정적인 감정 상태를 유지하고 있습니다",
-    "사회적 활동을 통한 에너지 충전이 잘 이루어지고 있습니다",
-    "새로운 도전과 성장에 대한 의지가 강합니다"
-  ],
-  "growth_areas": [
-    "스트레스 관리 능력 향상",
-    "혼자만의 시간을 통한 내적 성찰"
+  "behavioral_patterns": [
+    "주말에 감정이 더 긍정적",
+    "친구들과 시간을 보낸 후 만족도 상승",
+    "혼자만의 시간도 중요하게 생각"
   ],
   "recommendations": [
-    "현재의 긍정적 패턴을 유지하세요",
-    "정기적인 사회활동을 계속하되 적절한 휴식도 취하세요",
-    "새로운 관심사 탐구를 통해 개방성을 더욱 발전시키세요"
+    "현재의 긍정적인 라이프스타일 유지",
+    "스트레스 관리를 위한 명상이나 요가 시도",
+    "창의적 활동을 더 많이 포함시키기"
   ],
-  "last_updated": "2024-12-14T15:30:00Z",
-  "reliability_score": 0.88
+  "growth_opportunities": [
+    "감정 표현 능력 향상",
+    "장기 목표 설정 및 계획 수립",
+    "새로운 기술이나 취미 학습"
+  ],
+  "generated_at": "2025-06-14T15:00:00Z"
 }
 ```
 
-### 📚 **분석 이력 조회**
+#### **6. 분석 이력**
 ```http
-GET /api/v1/analysis/history/{user_id}?limit=20&offset=0
+GET /api/v1/analysis/history?limit=20&offset=0
 ```
-사용자의 분석 이력 조회
-
-**Parameters:**
-- `limit`: 조회할 항목 수 (기본값: 20)
+**설명:** 사용자의 분석 이력 조회  
+**인증:** Firebase 토큰 필요  
+**쿼리 파라미터:**
+- `limit`: 조회할 개수 (기본값: 20)
 - `offset`: 시작 위치 (기본값: 0)
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
 **응답:**
 ```json
 {
-  "user_id": "firebase_user_id",
-  "history": [
+  "user_uid": "firebase_user_uid",
+  "total_analyses": 45,
+  "limit": 20,
+  "offset": 0,
+  "analyses": [
     {
-      "analysis_id": "analysis_abc123",
-      "diary_id": "diary_20241214_001",
-      "analysis_date": "2024-12-14T15:30:00Z",
-      "primary_emotion": "joy",
-      "sentiment_score": 0.78,
-      "confidence_score": 0.82,
-      "insights_count": 3
+      "analysis_id": "analysis_1",
+      "diary_id": "diary_1",
+      "date": "2025-06-14T15:00:00Z",
+      "primary_emotion": "기쁨",
+      "mood_score": 8.5,
+      "themes": ["일상", "관계"]
     }
-  ],
-  "total_count": 25,
-  "page": 1,
-  "has_next": true
+  ]
 }
 ```
 
-### ❌ **분석 결과 삭제**
+#### **7. 분석 삭제**
 ```http
 DELETE /api/v1/analysis/diary/{diary_id}
 ```
-특정 일기의 분석 결과 삭제
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
+**설명:** 특정 일기의 분석 결과 삭제  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "message": "Analysis deleted successfully"
+  "message": "Analysis deleted successfully",
+  "diary_id": "diary_12345",
+  "user_uid": "firebase_user_uid",
+  "deleted_at": "2025-06-14T15:00:00Z"
 }
 ```
 
-### 📈 **분석 통계**
+#### **8. 분석 통계**
 ```http
-GET /api/v1/analysis/stats/{user_id}
+GET /api/v1/analysis/stats
 ```
-사용자의 분석 통계 조회
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
+**설명:** 사용자의 분석 통계 조회  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "user_id": "firebase_user_id",
-  "total_analyses": 25,
-  "analysis_period_days": 45,
-  "emotion_distribution": {
-    "joy": 8,
-    "excitement": 5,
-    "calm": 4,
-    "sadness": 3,
-    "stress": 5
-  },
-  "avg_sentiment_score": 0.68,
-  "sentiment_trend": [0.6, 0.65, 0.7, 0.68],
-  "personality_consistency": 0.85,
-  "dominant_traits": ["외향적", "직관적", "감정형"],
-  "analysis_frequency": {
-    "daily": 15,
-    "weekly": 8,
-    "irregular": 2
-  },
-  "most_active_periods": ["저녁", "주말"],
-  "total_insights": 75,
-  "insight_categories": {
-    "emotion": 25,
-    "personality": 20,
-    "lifestyle": 18,
-    "growth": 12
-  }
+  "user_uid": "firebase_user_uid",
+  "total_analyses": 45,
+  "this_month": 12,
+  "avg_mood_score": 7.8,
+  "most_common_emotion": "기쁨",
+  "emotional_diversity": 0.7,
+  "consistency_score": 0.8,
+  "growth_trend": "positive",
+  "streak_days": 15,
+  "last_analysis": "2025-06-14T15:00:00Z"
 }
 ```
 
 ---
 
-## 💕 **매칭 API** (`/api/v1/matching`)
+### **💕 매칭 시스템 API**
 
-### 🔍 **매칭 후보 추천**
+#### **1. 매칭 후보 추천**
 ```http
 POST /api/v1/matching/candidates
 ```
-사용자에게 호환성 높은 매칭 후보 추천
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-Content-Type: application/json
-```
-
-**요청 Body:**
+**설명:** 사용자에게 적합한 매칭 후보 추천  
+**인증:** Firebase 토큰 필요  
+**요청 바디:**
 ```json
 {
   "limit": 10,
-  "min_compatibility": 0.6,
+  "min_compatibility": 0.7,
   "filters": {
-    "age_range": [25, 35],
+    "age_range": "20-30",
     "location": "서울",
-    "interests": ["독서", "영화"],
-    "personality_types": ["ENFJ", "INFP"],
-    "exclude_users": ["user123", "user456"]
-  },
-  "include_analysis": true
+    "interests": ["독서", "영화"]
+  }
 }
 ```
-
 **응답:**
 ```json
 {
-  "user_id": "firebase_user_id",
+  "user_uid": "firebase_user_uid",
   "candidates": [
     {
-      "user_id": "candidate_001",
+      "user_uid": "candidate_1",
+      "name": "매칭후보_1",
       "compatibility_score": 0.85,
-      "compatibility_level": "excellent",
-      "age_range": "20대 후반",
-      "location": "서울 강남",
-      "interests": ["독서", "카페", "여행"],
-      "personality_type": "INFP",
-      "personality_traits": [
-        "깊이 있는 사고를 선호하는 내향적 성향",
-        "창의적이고 혁신적인 아이디어를 추구",
-        "인간관계와 가치를 중시하는 감정적 판단"
-      ],
-      "match_reasons": [
-        "성격적으로 잘 어울리는 조합",
-        "감정적으로 안정적인 관계 형성 가능",
-        "매우 높은 전체 호환성"
-      ],
-      "common_traits": [
-        "창의적 사고",
-        "인간관계 중시"
-      ],
-      "complementary_traits": [
-        "내향성과 외향성의 균형"
-      ],
-      "last_active": "2024-12-14T10:00:00Z",
-      "match_rank": 1
+      "common_interests": ["독서", "영화", "카페"],
+      "personality_match": "높음",
+      "age_range": "20대",
+      "distance": "5km",
+      "last_active": "2일 전"
     }
   ],
-  "total_count": 8,
+  "total_count": 5,
   "filters_applied": {
-    "age_range": [25, 35],
+    "age_range": "20-30",
     "location": "서울"
   },
-  "algorithm_version": "1.0",
-  "generated_at": "2024-12-14T15:30:00Z",
-  "expires_at": "2024-12-15T15:30:00Z"
+  "generated_at": "2025-06-14T15:00:00Z"
 }
 ```
 
-### 🎯 **호환성 점수 계산**
+#### **2. 호환성 계산**
 ```http
 POST /api/v1/matching/compatibility
 ```
-두 사용자 간의 상세 호환성 분석
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-Content-Type: application/json
-```
-
-**요청 Body:**
+**설명:** 두 사용자 간 호환성 점수 계산  
+**인증:** Firebase 토큰 필요  
+**요청 바디:**
 ```json
 {
-  "target_user_id": "target_user_123",
-  "include_details": true
+  "target_user_id": "target_user_uid"
 }
 ```
-
 **응답:**
 ```json
 {
-  "user_id_1": "firebase_user_id",
-  "user_id_2": "target_user_123",
-  "overall_compatibility": 0.82,
-  "compatibility_level": "excellent",
-  "breakdown": {
-    "personality_compatibility": 0.85,
-    "emotion_compatibility": 0.78,
-    "lifestyle_compatibility": 0.80,
-    "interest_compatibility": 0.75,
-    "communication_compatibility": 0.83
+  "user1_uid": "firebase_user_uid",
+  "user2_uid": "target_user_uid",
+  "overall_score": 0.82,
+  "compatibility_breakdown": {
+    "personality_match": 0.85,
+    "interest_overlap": 0.78,
+    "communication_style": 0.80,
+    "lifestyle_compatibility": 0.86,
+    "emotional_compatibility": 0.83
   },
-  "strengths": [
-    "성격적으로 잘 맞는 조합으로 서로를 이해하기 쉬울 것",
-    "감정적으로 안정된 관계를 유지할 수 있을 것",
-    "생활 패턴이 비슷하여 함께 시간을 보내기 편할 것"
-  ],
-  "potential_challenges": [
-    "관심사 차이로 인해 서로의 취미를 이해하려는 노력 필요"
-  ],
+  "shared_traits": ["낙관적", "사교적", "창의적"],
+  "complementary_traits": ["계획적 vs 자유로운", "이성적 vs 감성적"],
+  "potential_challenges": ["시간 관리 스타일 차이", "의사결정 방식 차이"],
   "recommendations": [
-    "서로의 장점을 인정하고 꾸준한 소통으로 관계 발전시키기",
-    "서로의 관심사에 대해 배우고 새로운 공통분모 찾기"
+    "공통 관심사인 독서와 영화 감상을 함께 즐겨보세요",
+    "서로 다른 시간 관리 스타일을 존중하며 조율해보세요",
+    "정기적인 대화 시간을 가져 소통을 늘려보세요"
   ],
-  "calculated_at": "2024-12-14T15:30:00Z",
-  "confidence_level": 0.88
+  "calculated_at": "2025-06-14T15:00:00Z"
 }
 ```
 
-### 👤 **매칭 프로필 조회**
+#### **3. 매칭 프로필 조회**
 ```http
-GET /api/v1/matching/profile/{user_id}
+GET /api/v1/matching/profile
 ```
-매칭용 사용자 프로필 조회
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
+**설명:** 사용자의 매칭용 프로필 조회  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "user_id": "user_123",
-  "display_name": "김철수",
-  "age_range": "20대 후반",
-  "location": "서울 강남",
-  "bio": "책을 좋아하고 새로운 사람들과의 만남을 즐깁니다.",
-  "personality_type": "ENFJ",
-  "personality_summary": [
-    "사교적이고 활동적인 성향",
-    "인간관계와 가치를 중시하는 감정적 판단"
-  ],
-  "interests": ["독서", "영화감상", "카페탐방"],
-  "hobbies": ["사진촬영", "요리"],
-  "lifestyle_tags": ["활동적", "사교적", "문화생활"],
-  "activity_level": "high",
-  "looking_for": ["진지한 관계", "장기적 파트너"],
-  "profile_completeness": 0.85,
-  "last_active": "2024-12-14T10:00:00Z",
-  "verified": true
+  "user_uid": "firebase_user_uid",
+  "display_name": "사용자 이름",
+  "email": "user@example.com",
+  "age_range": "20대",
+  "location": "서울",
+  "personality_summary": {
+    "mbti": "ENFP",
+    "traits": ["낙관적", "창의적", "사교적", "공감능력"],
+    "communication_style": "감정적이고 표현적"
+  },
+  "interests": ["독서", "영화감상", "카페투어", "여행", "사진"],
+  "lifestyle": {
+    "activity_level": "활발함",
+    "social_preference": "사교적",
+    "work_life_balance": "균형 추구"
+  },
+  "matching_preferences": {
+    "age_range": "20-30대",
+    "distance_limit": "20km",
+    "personality_types": ["ENFP", "INFP", "ENFJ"],
+    "deal_breakers": ["흡연", "극도의 내향성"]
+  },
+  "recent_activity": {
+    "last_diary": "2일 전",
+    "mood_trend": "긍정적",
+    "active_days": 15
+  },
+  "privacy_settings": {
+    "show_real_name": false,
+    "show_detailed_location": false,
+    "allow_contact": true
+  },
+  "updated_at": "2025-06-14T15:00:00Z"
 }
 ```
 
-### ⚙️ **매칭 선호도 설정**
+#### **4. 매칭 선호도 설정**
 ```http
 PUT /api/v1/matching/preferences
 ```
-매칭 선호도 업데이트
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-Content-Type: application/json
-```
-
-**요청 Body:**
+**설명:** 매칭 선호도 설정 업데이트  
+**인증:** Firebase 토큰 필요  
+**요청 바디:**
 ```json
 {
-  "enabled": true,
-  "visibility": "public",
-  "preferred_age_range": [25, 35],
-  "preferred_location_radius": 30,
-  "preferred_personality_types": ["ENFJ", "INFP", "ENFP"],
-  "personality_weight": 0.35,
-  "emotion_weight": 0.25,
-  "lifestyle_weight": 0.25,
-  "interest_weight": 0.15,
-  "min_compatibility_threshold": 0.6,
-  "diversity_factor": 0.2
+  "age_range": {"min": 22, "max": 32},
+  "distance_limit": 20,
+  "personality_preferences": ["ENFP", "INFP", "ENFJ"],
+  "deal_breakers": ["흡연", "과도한 음주"]
 }
 ```
-
 **응답:**
 ```json
 {
   "message": "Matching preferences updated successfully",
+  "user_uid": "firebase_user_uid",
   "preferences": {
-    "enabled": true,
-    "visibility": "public",
-    "preferred_age_range": [25, 35],
-    "personality_weight": 0.35,
-    "emotion_weight": 0.25,
-    "lifestyle_weight": 0.25,
-    "interest_weight": 0.15
-  }
+    "age_range": {"min": 22, "max": 32},
+    "distance_limit": 20
+  },
+  "updated_at": "2025-06-14T15:00:00Z"
 }
 ```
 
-### ⚙️ **매칭 선호도 조회**
+#### **5. 매칭 선호도 조회**
 ```http
 GET /api/v1/matching/preferences
 ```
-현재 매칭 선호도 설정 조회
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
+**설명:** 현재 매칭 선호도 설정 조회  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "user_id": "firebase_user_id",
-  "preferences": {
-    "enabled": true,
-    "visibility": "public",
-    "preferred_age_range": [25, 35],
-    "preferred_location_radius": 30,
-    "personality_weight": 0.35,
-    "emotion_weight": 0.25,
-    "lifestyle_weight": 0.25,
-    "interest_weight": 0.15,
-    "min_compatibility_threshold": 0.6
-  }
+  "user_uid": "firebase_user_uid",
+  "age_range": {"min": 22, "max": 32},
+  "distance_limit": 20,
+  "personality_preferences": ["ENFP", "INFP", "ENFJ", "INFJ"],
+  "interest_priorities": ["독서", "영화", "여행", "음식"],
+  "lifestyle_preferences": {
+    "activity_level": "중간-높음",
+    "social_frequency": "주 2-3회",
+    "communication_style": "직접적이고 솔직한"
+  },
+  "deal_breakers": ["흡연", "과도한 음주", "불성실함"],
+  "importance_weights": {
+    "personality": 0.4,
+    "interests": 0.3,
+    "lifestyle": 0.2,
+    "location": 0.1
+  },
+  "last_updated": "2025-06-14T15:00:00Z"
 }
 ```
 
-### 📚 **매칭 이력**
+#### **6. 매칭 이력**
 ```http
 GET /api/v1/matching/history?limit=20&offset=0
 ```
-매칭 이력 조회
-
-**Parameters:**
-- `limit`: 조회할 항목 수 (기본값: 20)
-- `offset`: 시작 위치 (기본값: 0)
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
+**설명:** 사용자의 매칭 이력 조회  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "user_id": "firebase_user_id",
-  "history": [
+  "user_uid": "firebase_user_uid",
+  "total_matches": 23,
+  "successful_connections": 5,
+  "limit": 20,
+  "offset": 0,
+  "matches": [
     {
-      "target_user_id": "user_123",
+      "match_id": "match_1",
+      "partner_uid": "user_1",
+      "partner_name": "매칭상대_1",
       "compatibility_score": 0.85,
-      "interaction_type": "like",
-      "matched_at": "2024-12-14T15:00:00Z",
-      "interaction_date": "2024-12-14T15:30:00Z",
-      "status": "pending"
+      "matched_date": "2025-06-14T15:00:00Z",
+      "status": "connected",
+      "connection_duration": "7일",
+      "feedback_given": true
     }
-  ],
-  "total_count": 15
+  ]
 }
 ```
 
-### 💬 **매칭 피드백**
+#### **7. 매칭 피드백**
 ```http
 POST /api/v1/matching/feedback
 ```
-매칭 결과에 대한 피드백 제출
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-Content-Type: application/json
-```
-
-**요청 Body:**
+**설명:** 매칭 결과에 대한 피드백 제출  
+**인증:** Firebase 토큰 필요  
+**요청 바디:**
 ```json
 {
-  "target_user_id": "user_123",
-  "interaction_type": "like",
-  "feedback_reason": "personality_match",
-  "rating": 5,
-  "comment": "성격이 잘 맞는 것 같아요"
+  "match_id": "match_12345",
+  "rating": 4,
+  "feedback": "좋은 매칭이었습니다",
+  "liked_aspects": ["성격 매칭", "공통 관심사"],
+  "suggestions": ["더 다양한 연령대 추천"]
 }
 ```
-
 **응답:**
 ```json
 {
   "message": "Feedback submitted successfully",
-  "status": "received"
+  "user_uid": "firebase_user_uid",
+  "feedback_id": "feedback_1735570800",
+  "status": "received",
+  "submitted_at": "2025-06-14T15:00:00Z"
 }
 ```
 
-### 📊 **매칭 분석**
+#### **8. 매칭 분석**
 ```http
-GET /api/v1/matching/analytics/{user_id}
+GET /api/v1/matching/analytics
 ```
-사용자의 매칭 성과 분석
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
+**설명:** 사용자의 매칭 분석 데이터 조회  
+**인증:** Firebase 토큰 필요  
 **응답:**
 ```json
 {
-  "user_id": "firebase_user_id",
-  "analysis_period": {
-    "start_date": "2024-11-01",
-    "end_date": "2024-12-14"
+  "user_uid": "firebase_user_uid",
+  "matching_stats": {
+    "total_potential_matches": 156,
+    "matches_generated": 23,
+    "successful_connections": 5,
+    "connection_rate": 0.22,
+    "average_compatibility": 0.78
   },
-  "total_matches_found": 45,
-  "avg_compatibility_score": 0.72,
-  "match_success_rate": 0.35,
-  "profile_views": 120,
-  "profile_likes": 25,
-  "profile_completeness": 0.85,
-  "personality_match_rate": 0.68,
-  "interest_overlap_avg": 0.45,
-  "profile_improvement_tips": [
-    "프로필 사진 추가로 완성도 향상",
-    "관심사를 더 구체적으로 작성"
-  ],
-  "matching_strategy_tips": [
-    "선호하는 성격 유형을 다양화해보세요",
-    "지역 범위를 조금 더 넓혀보는 것을 고려해보세요"
-  ],
-  "compatibility_trends": {
-    "personality": [0.65, 0.68, 0.70, 0.72],
-    "lifestyle": [0.60, 0.62, 0.65, 0.63]
+  "preference_insights": {
+    "most_compatible_types": ["ENFP", "INFP", "ENFJ"],
+    "successful_traits": ["창의적", "공감능력", "사교적"],
+    "improvement_areas": ["의사소통 스타일", "계획성"]
   },
-  "popular_traits": ["외향적", "창의적", "친화적"]
+  "activity_patterns": {
+    "peak_matching_days": ["금요일", "토요일", "일요일"],
+    "response_time_avg": "2.5시간",
+    "profile_view_frequency": "높음"
+  },
+  "recommendations": [
+    "프로필에 취미 정보를 더 상세히 추가해보세요",
+    "매칭 선호도를 조금 더 넓게 설정해보세요",
+    "정기적인 일기 작성으로 매칭 정확도를 높여보세요"
+  ],
+  "generated_at": "2025-06-14T15:00:00Z"
 }
 ```
 
 ---
 
-## 📋 **공통 응답 코드**
+### **🔍 디버깅 및 모니터링 API**
 
-### ✅ **성공 응답**
-- `200 OK`: 요청 성공
-- `201 Created`: 리소스 생성 성공
-- `204 No Content`: 성공 (응답 본문 없음)
-
-### ❌ **오류 응답**
-
-#### 클라이언트 오류 (4xx)
-```json
-{
-  "detail": "오류 메시지",
-  "error_code": "ERROR_CODE",
-  "timestamp": "2024-12-14T15:30:00Z"
-}
-```
-
-- `400 Bad Request`: 잘못된 요청
-- `401 Unauthorized`: 인증 실패
-- `403 Forbidden`: 권한 없음
-- `404 Not Found`: 리소스 없음
-- `429 Too Many Requests`: 요청 한도 초과
-
-#### 서버 오류 (5xx)
-```json
-{
-  "detail": "Internal server error",
-  "error_code": "INTERNAL_ERROR",
-  "timestamp": "2024-12-14T15:30:00Z"
-}
-```
-
-- `500 Internal Server Error`: 서버 내부 오류
-- `502 Bad Gateway`: 외부 서비스 오류
-- `503 Service Unavailable`: 서비스 일시 중단
-
----
-
-## 🔧 **인증 및 보안**
-
-### 🔑 **인증 방식**
-1. **Firebase Authentication**: 사용자 인증
-2. **JWT Bearer Token**: API 요청 인증
-
-### 📋 **Header 예시**
+#### **1. 환경 디버깅 (개발용)**
 ```http
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-Content-Type: application/json
+GET /api/v1/debug/env
 ```
-
-### 🛡️ **보안 기능**
-- **CORS**: Flutter 앱 및 웹 클라이언트 지원
-- **Rate Limiting**: API 요청 제한
-- **Input Validation**: 입력 데이터 검증
-- **Error Handling**: 안전한 오류 메시지
+**설명:** 환경변수 및 서비스 상태 확인 (개발/테스트 모드에서만 접근 가능)  
+**인증:** 불필요  
+**응답:**
+```json
+{
+  "debug_mode": true,
+  "environment": "development",
+  "authentication_method": "Firebase Admin SDK",
+  "firebase": {
+    "config_status": {
+      "project_id": true,
+      "private_key_id": true,
+      "private_key": true,
+      "client_email": true,
+      "client_id": true,
+      "use_firebase": true
+    },
+    "initialized": true,
+    "project_id_value": "your-proj...",
+    "client_email_value": "firebase-adminsdk..."
+  },
+  "services": {
+    "gemini_api": true,
+    "database": false,
+    "redis": false
+  },
+  "railway": {
+    "environment": "production",
+    "port": "8000",
+    "deployment": true
+  },
+  "removed_dependencies": [
+    "python-jose - Firebase Admin SDK로 대체",
+    "JWT 라이브러리 - Firebase 토큰 검증 사용"
+  ],
+  "message": "Firebase Admin SDK 기반 인증 시스템으로 완전 전환 완료"
+}
+```
 
 ---
 
-## 🚀 **Flutter 앱 연동 가이드**
+## 🚨 **오류 응답**
 
-### 📱 **기본 설정**
+### **인증 오류**
+```json
+{
+  "error": "FIREBASE_AUTH_FAILED",
+  "message": "Firebase token verification failed: Invalid token",
+  "status_code": 401,
+  "timestamp": "2025-06-14T15:00:00Z"
+}
+```
+
+### **권한 부족**
+```json
+{
+  "error": "INSUFFICIENT_PERMISSIONS",
+  "message": "Not enough permissions",
+  "status_code": 403,
+  "timestamp": "2025-06-14T15:00:00Z"
+}
+```
+
+### **리소스 없음**
+```json
+{
+  "error": "RESOURCE_NOT_FOUND",
+  "message": "Diary with ID 'diary_123' not found",
+  "status_code": 404,
+  "timestamp": "2025-06-14T15:00:00Z"
+}
+```
+
+### **검증 오류**
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Request validation failed",
+  "details": "diary_id field is required",
+  "status_code": 422,
+  "timestamp": "2025-06-14T15:00:00Z"
+}
+```
+
+### **서비스 비활성화**
+```json
+{
+  "error": "FIREBASE_SERVICE_UNAVAILABLE",
+  "message": "Firebase authentication service is not available. Please contact administrator.",
+  "status_code": 503,
+  "timestamp": "2025-06-14T15:00:00Z"
+}
+```
+
+### **서버 오류**
+```json
+{
+  "error": "INTERNAL_SERVER_ERROR",
+  "message": "An unexpected error occurred",
+  "status_code": 500,
+  "timestamp": "2025-06-14T15:00:00Z"
+}
+```
+
+---
+
+## 📱 **Flutter 연동 가이드**
+
+### **1. Firebase 설정**
 ```dart
-class APIService {
-  static const String baseUrl = 'https://ilgi-api-production.up.railway.app/';
+// Firebase 초기화
+await Firebase.initializeApp();
+
+// 사용자 로그인
+final UserCredential result = await FirebaseAuth.instance.signInWithEmailAndPassword(
+  email: email,
+  password: password,
+);
+```
+
+### **2. 토큰 획득**
+```dart
+// Firebase ID 토큰 획득
+User? user = FirebaseAuth.instance.currentUser;
+String? idToken = await user?.getIdToken();
+```
+
+### **3. API 호출 헬퍼 클래스**
+```dart
+class ApiService {
+  static const String baseUrl = 'https://ilgi-api-production.up.railway.app';
   
-  static Map<String, String> getHeaders(String token) {
+  static Future<Map<String, String>> getHeaders() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    String? token = await user?.getIdToken();
+    
     return {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
     };
   }
-}
-```
-
-### 🔐 **인증 플로우**
-1. Firebase Auth로 사용자 로그인
-2. Firebase ID Token 획득
-3. `/api/v1/auth/verify-token`으로 JWT 토큰 발급
-4. 이후 모든 API 요청에 JWT 토큰 사용
-
-### 📝 **일기 분석 예시**
-```dart
-Future<DiaryAnalysisResponse> analyzeDiary({
-  required String diaryId,
-  required String content,
-  Map<String, dynamic>? metadata,
-}) async {
-  final response = await http.post(
-    Uri.parse('$baseUrl/api/v1/analysis/diary'),
-    headers: getHeaders(accessToken),
-    body: jsonEncode({
-      'diary_id': diaryId,
-      'content': content,
-      'metadata': metadata,
-    }),
-  );
   
-  if (response.statusCode == 200) {
-    return DiaryAnalysisResponse.fromJson(jsonDecode(response.body));
-  } else {
-    throw Exception('Failed to analyze diary');
+  // 일기 분석 API 호출
+  static Future<Map<String, dynamic>> analyzeDiary({
+    required String diaryId,
+    required String content,
+    Map<String, dynamic>? metadata,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/analysis/diary'),
+      headers: await getHeaders(),
+      body: jsonEncode({
+        'diary_id': diaryId,
+        'content': content,
+        'metadata': metadata ?? {},
+      }),
+    );
+    
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to analyze diary: ${response.body}');
+    }
+  }
+  
+  // 매칭 후보 조회
+  static Future<List<dynamic>> getMatchingCandidates({
+    int limit = 10,
+    double minCompatibility = 0.5,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/matching/candidates'),
+      headers: await getHeaders(),
+      body: jsonEncode({
+        'limit': limit,
+        'min_compatibility': minCompatibility,
+      }),
+    );
+    
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['candidates'];
+    } else {
+      throw Exception('Failed to get matching candidates: ${response.body}');
+    }
   }
 }
 ```
 
----
-
-## 📊 **성능 및 제한사항**
-
-### ⚡ **성능 지표**
-- **응답 시간**: 일기 분석 2-5초, 기타 API 100-500ms
-- **동시 사용자**: 최대 1000명
-- **일일 요청 한도**: 사용자당 1000회
-
-### 📏 **데이터 제한**
-- **일기 내용**: 최대 5000자
-- **이미지 업로드**: 최대 10MB
-- **분석 이력**: 최대 1000건 보관
-
-### 🔄 **Rate Limiting**
-- **일반 API**: 분당 60회
-- **AI 분석**: 분당 10회
-- **매칭 API**: 분당 30회
+### **4. 오류 처리**
+```dart
+try {
+  final result = await ApiService.analyzeDiary(
+    diaryId: 'diary_123',
+    content: '오늘은 좋은 하루였다.',
+  );
+  print('분석 결과: $result');
+} on FirebaseAuthException catch (e) {
+  print('Firebase 인증 오류: ${e.message}');
+} on Exception catch (e) {
+  print('API 오류: $e');
+}
+```
 
 ---
 
-## 🐛 **문제 해결**
+## 🔧 **환경 설정**
 
-### 🔍 **일반적인 오류**
+### **필수 환경변수**
+```bash
+# Firebase 설정
+FIREBASE_PROJECT_ID=your-firebase-project-id
+FIREBASE_PRIVATE_KEY=your-private-key
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@your-project.iam.gserviceaccount.com
+FIREBASE_CLIENT_ID=your-client-id
+FIREBASE_PRIVATE_KEY_ID=your-private-key-id
+USE_FIREBASE=true
 
-**401 Unauthorized**
-```json
-{
-  "detail": "Token verification failed: Invalid token"
-}
+# AI 분석
+GEMINI_API_KEY=your-gemini-api-key
+
+# 기본 설정
+ENVIRONMENT=production
+DEBUG=false
 ```
-→ Firebase 토큰을 다시 발급받거나 JWT 토큰을 갱신하세요
 
-**429 Too Many Requests**
-```json
-{
-  "detail": "Rate limit exceeded"
-}
+### **선택 환경변수**
+```bash
+# 데이터베이스 (선택사항)
+DATABASE_URL=postgresql://user:password@host:port/dbname
+
+# Redis 캐시 (선택사항)
+REDIS_URL=redis://host:port
+
+# 보안 (필요시)
+SECRET_KEY=your-secret-key
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
-→ 요청 빈도를 줄이고 잠시 후 다시 시도하세요
-
-**500 Internal Server Error**
-```json
-{
-  "detail": "Analysis failed: Gemini API error"
-}
-```
-→ 잠시 후 다시 시도하거나 지원팀에 문의하세요
-
-### 📞 **지원**
-- **문서**: `/docs` (Swagger UI)
-- **상태 확인**: `/health`
-- **연결 테스트**: `/api/v1/flutter/test`
 
 ---
 
-**🎉 API 명세서 작성 완료!** 
+## 📊 **응답 시간 및 제한사항**
 
-이 명세서를 참고하여 Flutter 앱과 완벽하게 연동하세요!
+### **일반적인 응답 시간**
+- **인증 API:** 100-300ms
+- **일기 분석:** 2-5초 (AI 처리 시간)
+- **매칭 후보:** 500ms-1초
+- **통계 조회:** 200-500ms
+
+### **Rate Limiting**
+- **일반 API:** 1000요청/시간
+- **분석 API:** 100요청/시간
+- **매칭 API:** 500요청/시간
+
+### **데이터 제한**
+- **일기 내용:** 최대 10,000자
+- **매칭 후보:** 최대 50개
+- **분석 이력:** 최대 1000개
+
+---
+
+## 🆘 **문제 해결**
+
+### **Firebase 토큰 문제**
+1. 토큰 만료 시: `getIdToken(true)` 호출하여 새 토큰 발급
+2. 토큰 형식 오류: `Authorization: Bearer {token}` 형식 확인
+3. 사용자 로그아웃 상태: Firebase 재로그인 필요
+
+### **API 응답 오류**
+1. **401 Unauthorized:** Firebase 토큰 확인
+2. **403 Forbidden:** 권한 부족, 관리자 문의
+3. **404 Not Found:** 리소스 ID 확인
+4. **422 Validation Error:** 요청 데이터 형식 확인
+5. **503 Service Unavailable:** 서비스 일시 중단, 잠시 후 재시도
+
+### **서비스 상태 확인**
+- **헬스체크:** `GET /health`
+- **API 상태:** `GET /api/v1/status`
+- **환경 디버깅:** `GET /api/v1/debug/env` (개발 모드)
+
+---
+
+## 📞 **지원 및 문의**
+
+**API 문서:** https://ilgi-api-production.up.railway.app/docs  
+**헬스체크:** https://ilgi-api-production.up.railway.app/health  
+**Github Repository:** [Repository URL]  
+
+**문의 시 포함할 정보:**
+- Firebase UID (앞 10자리만)
+- 요청 URL 및 메소드
+- 요청 헤더 및 바디
+- 오류 메시지 전문
+- 발생 시간
+
+---
+
+**🎉 Firebase Admin SDK 기반의 완전한 AI 일기 분석 백엔드 API가 준비되었습니다!**

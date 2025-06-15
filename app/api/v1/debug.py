@@ -237,7 +237,8 @@ async def debug_page():
                     <label for="firebaseToken">Firebase ID 토큰 입력:</label>
                     <textarea id="firebaseToken" rows="4" placeholder="Firebase ID 토큰을 여기에 붙여넣으세요 (eyJ...로 시작)"></textarea>
                 </div>
-                <button class="btn" onclick="testFirebaseToken()">Firebase 토큰 검증 및 JWT 발급</button>
+                <button class="btn" onclick="testFirebaseToken()">Firebase 토큰 검증</button>
+                <button class="btn" onclick="analyzeFirebaseToken()">🔍 Firebase 토큰 상세 분석</button>
                 <div id="firebaseResponse" class="response"></div>
             </div>
             
@@ -372,13 +373,21 @@ async def debug_page():
                 }
             });
             
-            if (response.success && response.data.access_token) {
-                currentJWTToken = response.data.access_token;
-                document.getElementById('jwtToken').value = currentJWTToken;
-                
-                // JWT 토큰 표시
-                response.data._jwt_token_preview = currentJWTToken.substring(0, 100) + '...';
+            displayResponse('firebaseResponse', response);
+        }
+        
+        // Firebase 토큰 상세 분석
+        async function analyzeFirebaseToken() {
+            const token = document.getElementById('firebaseToken').value.trim();
+            if (!token) {
+                alert('Firebase 토큰을 입력해주세요');
+                return;
             }
+            
+            const response = await apiCall(`${BASE_URL}/api/v1/debug/firebase-token-analysis`, {
+                method: 'POST',
+                body: JSON.stringify({ token: token })
+            });
             
             displayResponse('firebaseResponse', response);
         }
@@ -626,7 +635,6 @@ async def debug_page():
         // 페이지 로드 시 기본 환경 체크
         window.onload = function() {
             checkHealth();
-            checkServerConfig();
         };
     </script>
 </body>
@@ -726,6 +734,145 @@ async def decode_token(token: str):
         }
 
 
+@router.post("/firebase-token-analysis")
+async def analyze_firebase_token(request: dict):
+    """
+    Firebase 토큰 상세 분석 - Base64 패딩 문제 디버깅
+    """
+    try:
+        from firebase_admin import auth
+        from app.core.security import firebase_initialized
+        
+        raw_token = request.get("token", "")
+        
+        # 토큰 기본 정보 분석
+        analysis = {
+            "raw_token_info": {
+                "length": len(raw_token),
+                "trimmed_length": len(raw_token.strip()),
+                "has_bearer": raw_token.startswith("Bearer "),
+                "preview": raw_token[:50] + "..." if len(raw_token) > 50 else raw_token
+            }
+        }
+        
+        # Bearer 제거 후 분석
+        if raw_token.startswith("Bearer "):
+            token = raw_token[7:].strip()
+        else:
+            token = raw_token.strip()
+            
+        # JWT 구조 분석
+        parts = token.split('.')
+        analysis["jwt_structure"] = {
+            "parts_count": len(parts),
+            "is_valid_jwt_format": len(parts) == 3
+        }
+        
+        # 각 부분의 Base64 패딩 분석
+        analysis["base64_analysis"] = []
+        padded_parts = []
+        
+        for i, part in enumerate(parts):
+            part_info = {
+                "part_index": i,
+                "part_name": ["header", "payload", "signature"][i] if i < 3 else "unknown",
+                "original_length": len(part),
+                "mod_4": len(part) % 4,
+                "needs_padding": len(part) % 4 != 0,
+                "first_10": part[:10],
+                "last_10": part[-10:] if len(part) > 10 else part
+            }
+            
+            # Base64 패딩 추가
+            padded_part = part
+            while len(padded_part) % 4 != 0:
+                padded_part += '='
+            
+            part_info["padded_length"] = len(padded_part)
+            part_info["padding_added"] = len(padded_part) - len(part)
+            
+            analysis["base64_analysis"].append(part_info)
+            padded_parts.append(padded_part)
+        
+        # 패딩된 토큰 재구성
+        padded_token = '.'.join(padded_parts)
+        analysis["padded_token"] = {
+            "length": len(padded_token),
+            "preview": padded_token[:50] + "..." if len(padded_token) > 50 else padded_token
+        }
+        
+        # Firebase 검증 시도
+        if firebase_initialized and len(parts) == 3:
+            try:
+                # 원본 토큰으로 검증 시도
+                try:
+                    decoded_original = auth.verify_id_token(token)
+                    analysis["firebase_verification"] = {
+                        "original_token": "SUCCESS",
+                        "padded_token": "NOT_TESTED",
+                        "user_data": {
+                            "uid": decoded_original.get("uid"),
+                            "email": decoded_original.get("email"),
+                            "iss": decoded_original.get("iss"),
+                            "aud": decoded_original.get("aud")
+                        }
+                    }
+                except Exception as original_error:
+                    # 패딩된 토큰으로 검증 시도
+                    try:
+                        decoded_padded = auth.verify_id_token(padded_token)
+                        analysis["firebase_verification"] = {
+                            "original_token": f"FAILED: {str(original_error)}",
+                            "padded_token": "SUCCESS",
+                            "user_data": {
+                                "uid": decoded_padded.get("uid"),
+                                "email": decoded_padded.get("email"),
+                                "iss": decoded_padded.get("iss"),
+                                "aud": decoded_padded.get("aud")
+                            }
+                        }
+                    except Exception as padded_error:
+                        analysis["firebase_verification"] = {
+                            "original_token": f"FAILED: {str(original_error)}",
+                            "padded_token": f"FAILED: {str(padded_error)}",
+                            "user_data": None
+                        }
+            except Exception as e:
+                analysis["firebase_verification"] = {
+                    "error": str(e),
+                    "status": "ERROR"
+                }
+        else:
+            analysis["firebase_verification"] = {
+                "status": "SKIPPED",
+                "reason": "Firebase not initialized" if not firebase_initialized else "Invalid JWT format"
+            }
+        
+        # 권장 사항
+        recommendations = []
+        if len(parts) != 3:
+            recommendations.append("❌ JWT 토큰은 3개 부분으로 구성되어야 합니다")
+        
+        for part_info in analysis["base64_analysis"]:
+            if part_info["needs_padding"]:
+                recommendations.append(f"⚠️ {part_info['part_name']} 부분에 Base64 패딩이 필요합니다")
+        
+        if not recommendations:
+            recommendations.append("✅ 토큰 형식이 올바릅니다")
+        
+        analysis["recommendations"] = recommendations
+        analysis["timestamp"] = "2025-06-15T02:31:31Z"
+        
+        return analysis
+        
+    except Exception as e:
+        return {
+            "error": str(e),
+            "message": "Firebase 토큰 분석 중 오류 발생",
+            "timestamp": "2025-06-15T02:31:31Z"
+        }
+
+
 @router.get("/server-config")
 async def get_server_config():
     """
@@ -742,7 +889,7 @@ async def get_server_config():
             "algorithm": settings.ALGORITHM,
             "secret_key_present": bool(settings.SECRET_KEY),
             "secret_key_length": len(settings.SECRET_KEY) if settings.SECRET_KEY else 0,
-            "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            "access_token_expire_minutes": getattr(settings, 'ACCESS_TOKEN_EXPIRE_MINUTES', 30)
         },
         "firebase_config": {
             "initialized": firebase_initialized,
@@ -756,7 +903,7 @@ async def get_server_config():
             "port": os.getenv("PORT")
         },
         "api_keys": {
-            "gemini_api_present": bool(settings.GEMINI_API_KEY)
+            "gemini_api_present": bool(getattr(settings, 'GEMINI_API_KEY', None))
         },
         "timestamp": "2025-06-15T02:31:31Z"
     }
