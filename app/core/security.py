@@ -169,11 +169,12 @@ async def verify_firebase_token(token: str) -> Dict[str, Any]:
         raise AuthenticationException("Firebase authentication service is not available")
     
     try:
-        # 토큰 정제 - 공백 제거 및 Base64 패딩 문제 해결
-        clean_token = token.strip()
+        # 토큰 정제 - 공백, 개행문자, 탭 제거
+        clean_token = token.strip().replace('\n', '').replace('\r', '').replace('\t', '').replace(' ', '')
         
         # 토큰 기본 정보 로깅
-        logger.info(f"🎫 토큰 길이: {len(clean_token)}")
+        logger.info(f"🎫 원본 토큰 길이: {len(token)}")
+        logger.info(f"🎫 정제 후 토큰 길이: {len(clean_token)}")
         logger.info(f"🎫 토큰 부분 개수: {len(clean_token.split('.'))}")
         
         # JWT 토큰은 3개 부분으로 구성되어야 함
@@ -220,21 +221,45 @@ async def verify_firebase_token(token: str) -> Dict[str, Any]:
         except Exception as e:
             logger.warning(f"⚠️ 토큰 페이로드 디코딩 실패: {e}")
         
-        # 각 부분의 길이 확인 및 패딩 추가 (필요한 경우)
-        padded_parts = []
+        # 각 부분의 Base64 유효성 및 패딩 처리
+        validated_parts = []
         for i, part in enumerate(token_parts):
-            # Base64 패딩 추가 (길이가 4의 배수가 되도록)
-            while len(part) % 4 != 0:
-                part += '='
-            padded_parts.append(part)
-            logger.info(f"🔧 Part {i}: 원본 길이 {len(token_parts[i])}, 패딩 후 길이 {len(part)}")
+            part_name = ["header", "payload", "signature"][i]
+            original_length = len(part)
+            remainder = original_length % 4
+            
+            logger.info(f"🔧 {part_name} - 원본 길이: {original_length}, 나머지: {remainder}")
+            
+            # Base64 유효성 검사
+            if remainder == 1:
+                logger.error(f"❌ {part_name} 부분 Base64 오류: 나머지 1은 유효하지 않음")
+                logger.error(f"   토큰이 잘렸거나 손상되었을 가능성이 높음")
+                logger.error(f"   마지막 10글자: ...{part[-10:]}")
+                logger.error(f"   첫 10글자: {part[:10]}...")
+                logger.error(f"   전체 길이: {len(part)} (나머지: {remainder})")
+                logger.error(f"   ☝️ 토큰 복사 시 잘린 것 같습니다. 전체 토큰을 다시 복사해주세요!")
+                raise AuthenticationException(f"Invalid Base64 format in {part_name}: remainder 1 is not valid. Token may be truncated.")
+            
+            # 올바른 패딩 추가
+            padded_part = part
+            if remainder == 2:
+                padded_part += '=='
+                logger.info(f"🔧 {part_name} - 패딩 2개 추가")
+            elif remainder == 3:
+                padded_part += '='
+                logger.info(f"🔧 {part_name} - 패딩 1개 추가")
+            elif remainder == 0:
+                logger.info(f"🔧 {part_name} - 패딩 불필요")
+            
+            validated_parts.append(padded_part)
+            logger.info(f"🔧 {part_name} - 최종 길이: {len(padded_part)}")
         
         # 패딩이 추가된 토큰 재구성
-        padded_token = '.'.join(padded_parts)
+        final_token = '.'.join(validated_parts)
         
         # Firebase Admin SDK로 토큰 검증
         logger.info(f"🔥 Firebase Admin SDK 토큰 검증 시도...")
-        decoded_token = auth.verify_id_token(padded_token)
+        decoded_token = auth.verify_id_token(final_token)
         logger.info(f"✅ Firebase 토큰 검증 성공: uid={decoded_token.get('uid')}")
         return decoded_token
         
