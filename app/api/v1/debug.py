@@ -646,91 +646,97 @@ async def debug_page():
 @router.get("/token-decode")
 async def decode_token(token: str):
     """
-    JWT 토큰 디코딩 디버깅 API
+    Firebase ID 토큰 디코딩 디버깅 API (백엔드는 Firebase 토큰만 사용)
     """
     try:
         import time
-        from jose import jwt
-        from app.config.settings import get_settings
+        import base64
+        import json
+        from firebase_admin import auth
+        from app.core.security import firebase_initialized
         
-        settings = get_settings()
+        # Firebase ID 토큰 수동 디코딩 (백엔드는 JWT 사용 안함)
+        token_parts = token.split('.')
+        if len(token_parts) != 3:
+            return {
+                "error": "Invalid token format",
+                "token_preview": token[:50] + "...",
+                "message": "Firebase ID 토큰은 3개 부분으로 구성되어야 합니다",
+                "parts_count": len(token_parts)
+            }
         
-        # 토큰을 디코딩하지 말고 헤더만 파싱
+        # 헤더 디코딩
         try:
-            header = jwt.get_unverified_header(token)
-        except Exception:
-            # jose에서 지원하지 않으면 수동으로 파싱
-            import base64
-            import json
-            header_data = token.split('.')[0]
-            # Base64 디코딩
+            header_data = token_parts[0]
             header_data += '=' * (4 - len(header_data) % 4)
             header = json.loads(base64.b64decode(header_data))
+        except Exception as e:
+            header = {"error": f"Header decoding failed: {str(e)}"}
         
-        # 토큰을 검증 없이 디코딩
+        # 페이로드 디코딩
         try:
-            unverified_payload = jwt.decode(token, options={"verify_signature": False})
-        except Exception:
-            # 수동 파싱
-            import base64
-            import json
-            payload_data = token.split('.')[1]
+            payload_data = token_parts[1]
             payload_data += '=' * (4 - len(payload_data) % 4)
             unverified_payload = json.loads(base64.b64decode(payload_data))
-        
-        # 실제 검증 시도
-        try:
-            verified_payload = jwt.decode(
-                token, 
-                settings.SECRET_KEY, 
-                algorithms=[settings.ALGORITHM]
-            )
-            verification_status = "VALID"
-            verification_error = None
-        except jwt.ExpiredSignatureError:
-            verification_status = "EXPIRED"
-            verification_error = "Token has expired"
-            verified_payload = None
-        except jwt.InvalidTokenError as e:
-            verification_status = "INVALID"
-            verification_error = str(e)
-            verified_payload = None
         except Exception as e:
-            verification_status = "ERROR"
-            verification_error = str(e)
-            verified_payload = None
+            unverified_payload = {"error": f"Payload decoding failed: {str(e)}"}
+        
+        # Firebase 검증 시도 (백엔드는 Firebase만 사용)
+        verification_status = "NOT_TESTED"
+        verification_error = None
+        verified_payload = None
+        
+        if firebase_initialized:
+            try:
+                verified_payload = auth.verify_id_token(token)
+                verification_status = "VALID_FIREBASE"
+                verification_error = None
+            except auth.ExpiredIdTokenError:
+                verification_status = "EXPIRED"
+                verification_error = "Firebase token has expired"
+            except auth.InvalidIdTokenError as e:
+                verification_status = "INVALID"
+                verification_error = f"Invalid Firebase token: {str(e)}"
+            except Exception as e:
+                verification_status = "ERROR"
+                verification_error = f"Firebase verification error: {str(e)}"
+        else:
+            verification_status = "FIREBASE_DISABLED"
+            verification_error = "Firebase Admin SDK not initialized"
         
         return {
+            "authentication_method": "Firebase Admin SDK (JWT 사용 안함)",
             "token_preview": token[:50] + "...",
             "header": header,
             "unverified_payload": unverified_payload,
             "time_info": {
                 "current_timestamp": int(time.time()),
-                "token_issued_at": unverified_payload.get("iat"),
-                "token_expires_at": unverified_payload.get("exp"),
-                "token_subject": unverified_payload.get("sub"),
-                "time_until_expiry_seconds": unverified_payload.get("exp", 0) - int(time.time()) if unverified_payload.get("exp") else None,
-                "is_expired": unverified_payload.get("exp", 0) < int(time.time()) if unverified_payload.get("exp") else None
+                "token_issued_at": unverified_payload.get("iat") if isinstance(unverified_payload, dict) else None,
+                "token_expires_at": unverified_payload.get("exp") if isinstance(unverified_payload, dict) else None,
+                "token_subject": unverified_payload.get("sub") if isinstance(unverified_payload, dict) else None,
+                "time_until_expiry_seconds": (unverified_payload.get("exp", 0) - int(time.time())) if isinstance(unverified_payload, dict) and unverified_payload.get("exp") else None,
+                "is_expired": (unverified_payload.get("exp", 0) < int(time.time())) if isinstance(unverified_payload, dict) and unverified_payload.get("exp") else None
             },
-            "verification": {
+            "firebase_verification": {
                 "status": verification_status,
                 "error": verification_error,
                 "verified_payload": verified_payload
             },
             "server_config": {
-                "algorithm": settings.ALGORITHM,
-                "secret_key_present": bool(settings.SECRET_KEY),
-                "secret_key_length": len(settings.SECRET_KEY) if settings.SECRET_KEY else 0,
-                "secret_key_preview": settings.SECRET_KEY[:10] + "..." if settings.SECRET_KEY else None
+                "authentication_method": "Firebase Admin SDK",
+                "firebase_initialized": firebase_initialized,
+                "jwt_removed": True,
+                "note": "백엔드는 Firebase ID 토큰만 사용하고 JWT 는 제거되었습니다"
             },
-            "timestamp": "2025-06-15T02:31:31Z"
+            "timestamp": "2025-06-16T15:00:00Z"
         }
         
     except Exception as e:
         return {
             "error": str(e),
             "token_preview": token[:50] + "...",
-            "message": "토큰 디코딩 중 오류 발생"
+            "message": "Firebase ID 토큰 디코딩 중 오류 발생",
+            "authentication_method": "Firebase Admin SDK"
         }
 
 
@@ -876,7 +882,7 @@ async def analyze_firebase_token(request: dict):
 @router.get("/server-config")
 async def get_server_config():
     """
-    서버 설정 상태 확인 API
+    서버 설정 상태 확인 API (백엔드는 Firebase 전용)
     """
     from app.config.settings import get_settings
     from app.core.security import firebase_initialized
@@ -885,16 +891,24 @@ async def get_server_config():
     settings = get_settings()
     
     return {
-        "jwt_config": {
-            "algorithm": settings.ALGORITHM,
-            "secret_key_present": bool(settings.SECRET_KEY),
-            "secret_key_length": len(settings.SECRET_KEY) if settings.SECRET_KEY else 0,
-            "access_token_expire_minutes": getattr(settings, 'ACCESS_TOKEN_EXPIRE_MINUTES', 30)
-        },
+        "authentication_method": "Firebase Admin SDK Only",
+        "authentication_note": "백엔드는 Firebase ID 토큰만 사용하고 JWT 는 제거되었습니다",
         "firebase_config": {
             "initialized": firebase_initialized,
             "project_id_present": bool(settings.FIREBASE_PROJECT_ID),
-            "use_firebase": settings.USE_FIREBASE
+            "project_id_preview": settings.FIREBASE_PROJECT_ID[:10] + "..." if settings.FIREBASE_PROJECT_ID else None,
+            "client_email_present": bool(settings.FIREBASE_CLIENT_EMAIL),
+            "private_key_present": bool(settings.FIREBASE_PRIVATE_KEY),
+            "use_firebase": settings.USE_FIREBASE,
+            "status": "active" if firebase_initialized else "disabled"
+        },
+        "deprecated_jwt_config": {
+            "note": "JWT 설정이 여전히 있지만 사용하지 않음",
+            "algorithm": settings.ALGORITHM,
+            "secret_key_present": bool(settings.SECRET_KEY),
+            "secret_key_length": len(settings.SECRET_KEY) if settings.SECRET_KEY else 0,
+            "access_token_expire_minutes": getattr(settings, 'ACCESS_TOKEN_EXPIRE_MINUTES', 30),
+            "removal_recommended": True
         },
         "environment": {
             "debug": settings.DEBUG,
@@ -905,5 +919,11 @@ async def get_server_config():
         "api_keys": {
             "gemini_api_present": bool(getattr(settings, 'GEMINI_API_KEY', None))
         },
-        "timestamp": "2025-06-15T02:31:31Z"
+        "migration_status": {
+            "jwt_to_firebase": "completed",
+            "backend_ready": firebase_initialized,
+            "frontend_update_needed": True,
+            "expected_token_type": "Firebase ID Token"
+        },
+        "timestamp": "2025-06-16T15:00:00Z"
     }
